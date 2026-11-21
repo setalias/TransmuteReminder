@@ -505,19 +505,26 @@ function ns.scan(manual)
         end
     end
 
-    -- A recipe that reports the same cooldown as the transmutes is sharing it
-    -- (or is not really yours), so it is not tracked separately.
-    if bestRem then
-        local kept = {}
-        for _, r in ipairs(others) do
-            if math.abs(r.remaining - bestRem) <= TOLERANCE then
-                me.cooldowns["r:" .. r.name] = nil
-            else
-                kept[#kept + 1] = r
+    -- A recipe that reports the same cooldown as any transmute is sharing it
+    -- (Refined Scale of Onyxia shares the Arcanite group's cooldown), so it is
+    -- not tracked separately.
+    local kept = {}
+    for _, r in ipairs(others) do
+        local shared = false
+        for _, tr in ipairs(results) do
+            if is_transmute_name(tr.name) and tr.remaining
+                and math.abs(tr.remaining - r.remaining) <= TOLERANCE then
+                shared = true
+                break
             end
         end
-        others = kept
+        if shared then
+            me.cooldowns["r:" .. r.name] = nil
+        else
+            kept[#kept + 1] = r
+        end
     end
+    others = kept
 
     if manual then
         if #results == 0 then
