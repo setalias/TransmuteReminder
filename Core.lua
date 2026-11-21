@@ -182,7 +182,8 @@ local function init_db()
     me = acct.chars[mykey] or {}
     acct.chars[mykey] = me
 
-    -- Cooldowns saved before groups existed use different keys, so start over.
+    -- When the saved data format changes, stored cooldowns are cleared so old
+    -- entries can't be misread. Settings are kept.
     if acct.version ~= ns.DATA_VERSION then
         for _, c in pairs(acct.chars) do
             c.cooldowns, c.dismissed, c.altDismissed, c.recipes = nil, nil, nil, nil

@@ -82,7 +82,7 @@ function M.install(opts)
     IsInInstance = function() return M.inInstance end
     IsInGroup = function() return M.inGroup end
     IsControlKeyDown = function() return M.ctrl or false end
-    UnitName = function() return M.charName or "Sandy" end
+    UnitName = function() return M.charName or "Ayla" end
     GetRealmName = function() return "Area 52" end
     UnitClass = function() return "Mage", "MAGE" end
     GetCursorPosition = function() return 600, 400 end

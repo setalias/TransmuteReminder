@@ -28,7 +28,7 @@ local function scan(cds) M.recipeCooldowns = cds; slash("scan") end
 M.install()
 TransmuteReminderAccountDB = {
     settings = { message = "Old text", disabled = { transmute = true } },
-    chars = { ["Sandy-Area 52"] = { cooldowns = { transmute = { name = "Transmutes", expiry = 1 } } } },
+    chars = { ["Ayla-Area 52"] = { cooldowns = { transmute = { name = "Transmutes", expiry = 1 } } } },
 }
 local ns
 try("load", function() ns = M.load(FILES) end)
@@ -208,22 +208,22 @@ ns.Dismiss()
 
 -- ===== Alts: per-cooldown dismissal =====
 slash("clear")
-scan({ [111] = 30, [222] = 600 })   -- Sandy: Arcanite soon, Iron to Gold later
+scan({ [111] = 30, [222] = 600 })   -- main character: Arcanite soon, Iron to Gold later
 M.charName = "Bob"
 M.install({ keepTime = true })
 ns = M.load(FILES)
 M.fire(ns, "PLAYER_LOGIN")
 M.advance(40); M.runTimers()
 check(#ns.ready_alts() == 1 and ns.ready_alts()[1].key == "g:111", "alt Arcanite ready")
-check(popup().__shown and popup().sub.__text:find("Sandy (Arcanite)", 1, true), "alt shown in sub line")
+check(popup().__shown and popup().sub.__text:find("Ayla (Arcanite)", 1, true), "alt shown in sub line")
 ns.Dismiss()
 check(not popup().__shown, "alt reminder dismissed")
 M.advance(600); M.runTimers()
 check(popup().__shown and ns.ready_alts()[1].key == "g:222", "a later alt cooldown still reminds")
 slash("alts")
-check(printed("Sandy, Iron to Gold: ready"), "/tmr alts output")
-slash("forget Sandy")
-check(#ns.alt_items() == 0, "forgot Sandy")
+check(printed("Ayla, Iron to Gold: ready"), "/tmr alts output")
+slash("forget Ayla")
+check(#ns.alt_items() == 0, "forgot Ayla")
 
 -- ===== Options panel =====
 local panel = M.category.panel
