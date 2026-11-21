@@ -263,8 +263,10 @@ function ns.Options_Create()
     text_block("GameFontHighlight",
         "Shows a reminder when a transmute or other profession cooldown is ready. No countdown bars. "
         .. "Recipes that share a cooldown are grouped into one entry. "
+        .. "Cooldowns are shared across your characters, so any character can remind you when an alchemist alt is ready. "
         .. "Left-click the reminder to open the recipe, right-click to snooze, drag to move it.")
 
+    header("Status")
     local status = text_block("GameFontNormal", "")
     status.refresh = function()
         status.fs:SetText(table.concat(ns.StatusLines(), "\n"))
@@ -476,11 +478,11 @@ function ns.Options_Create()
 
     header("Commands")
     text_block("GameFontHighlight",
-        "/tmr    Show the current status\n"
+        "/tmr    Show every tracked cooldown, including your other characters\n"
         .. "/tmr options    Open this panel\n"
         .. "/tmr test    Show the reminder now\n"
         .. "/tmr scan    Scan the open Alchemy window and list each transmute with its time left\n"
-        .. "/tmr whatsnext    Show the next cooldown to finish\n"
+        .. "/tmr whatsnext    Show the next cooldown to finish (your alts' if this character has none)\n"
         .. "/tmr reset    Reset the reminder position\n"
         .. "/tmr clear    Clear this character's stored cooldowns\n"
         .. "/tmr lock, /tmr unlock    Lock or unlock the position\n"
@@ -490,7 +492,7 @@ function ns.Options_Create()
         .. "/tmr hours <n>    Set the manual cooldown in hours\n"
         .. "/tmr alts    List cooldowns recorded on other characters\n"
         .. "/tmr forget <name>    Remove a character you no longer play\n"
-        .. "/tmr debug [on|off]    Print diagnostic info, or every cast's spell ID")
+        .. "/tmr debug [on|off]    Print diagnostic info; on also shows recipe IDs and raw values")
 
     panel.refresh = refresh_all
     panel:SetScript("OnShow", refresh_all)

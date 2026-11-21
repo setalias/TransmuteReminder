@@ -8,7 +8,7 @@ A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute
 - **Knows which transmutes share a cooldown.** On Forever the Arcanite group (Arcanite and the elemental transmutes) is one timer, while Iron to Gold and Mithril to Truesilver each have their own. Each gets its own reminder.
 - **Works for cooldowns started before install.** Open your Alchemy window once and the addon reads every cooldown from the game.
 - **Other profession cooldowns too.** Any recipe on cooldown, such as Primal Mooncloth, is tracked when you open that profession.
-- **Alts.** Cooldowns are saved account-wide, so the reminder tells you when an alt has something ready.
+- **Alts.** Cooldowns are saved account-wide, so any character, even one without Alchemy, reminds you when an alchemist alt has something ready.
 - **Click actions.** Left-click opens the recipe in your profession window, right-click snoozes, middle-click dismisses. Drag to move.
 - **Customizable.** Reminder text (up to 40 characters), text color, font, size, icon, background opacity, border, and a pulse or glow animation.
 - **Alerts.** Optional sound, repeat reminder, snooze length and chat message.
@@ -20,7 +20,7 @@ A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute
 
 1. Install the addon and log in.
 2. Open your Alchemy window once on each alchemist. This records the current cooldowns.
-3. Play as normal. The reminder appears when a cooldown ends.
+3. Play as normal on any character. The reminder appears when a cooldown ends, whichever character you're on.
 
 Settings are in Options > AddOns > TransmuteReminder, or type `/tmr options`.
 
@@ -28,11 +28,11 @@ Settings are in Options > AddOns > TransmuteReminder, or type `/tmr options`.
 
 | Command | What it does |
 | --- | --- |
-| `/tmr` | Show the status of every tracked cooldown |
+| `/tmr` | Show every tracked cooldown, including your other characters |
 | `/tmr options` | Open the options panel |
 | `/tmr test` | Preview the reminder for 10 seconds |
 | `/tmr scan` | Scan the open Alchemy window and list each transmute with its time left |
-| `/tmr whatsnext` | Show the next cooldown to finish |
+| `/tmr whatsnext` | Show the next cooldown to finish (your alts' if this character has none) |
 | `/tmr alts` | List cooldowns on your other characters |
 | `/tmr forget <name>` | Remove a character you no longer play |
 | `/tmr clear` | Clear this character's stored cooldowns |
@@ -51,6 +51,9 @@ No. Open your Alchemy window and it picks up any cooldown already running.
 
 **Why does Arcanite show as one reminder when I know several transmutes?**
 On Forever many transmutes share one cooldown. The addon groups them so you get one reminder per timer, not one per recipe.
+
+**Will I get reminders on characters that aren't alchemists?**
+Yes. Cooldowns are shared across your account, so any character shows the reminder when an alchemist alt is ready. You can turn this off in the options.
 
 **Will viewing a guildmate's profession mess up my timers?**
 No. Other players' professions are never read.
