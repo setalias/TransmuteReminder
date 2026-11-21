@@ -1,5 +1,8 @@
 -- TransmuteReminder: the reminder window, its tooltip, the minimap button, and the
 -- AddOn Compartment entry.
+--
+-- Core.lua calls ns.Popup_Set(state) whenever the reminder should change; this
+-- file only draws. The choice lists below are shared with Options.lua.
 
 local ADDON_NAME, ns = ...
 

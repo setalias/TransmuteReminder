@@ -1,15 +1,22 @@
 name: Release
 
+# Pushing a tag (for example v0.1.0) tests the addon, then packages it with the
+# BigWigs packager and uploads it to CurseForge and GitHub Releases.
+
 on:
   push:
     tags:
-      - "**"
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   release:
+    needs: test
     runs-on: ubuntu-latest
     env:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}

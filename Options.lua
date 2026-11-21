@@ -1,4 +1,9 @@
 -- TransmuteReminder: options panel (Options > AddOns > TransmuteReminder)
+--
+-- A canvas panel in a scroll frame. Each widget is an "item" with place(y),
+-- which positions it and returns the next y, and an optional refresh(), which
+-- reloads its value from the settings. refresh_all() runs when the panel opens
+-- and when Core calls ns.Options_Refresh().
 
 local ADDON_NAME, ns = ...
 

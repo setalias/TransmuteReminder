@@ -9,4 +9,6 @@ ignore:
   - .github
   - .gitignore
   - .luacheckrc
+  - .editorconfig
+  - .gitattributes
   - tests

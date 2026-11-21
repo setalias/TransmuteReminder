@@ -1,65 +1,81 @@
 # TransmuteReminder
 
-A WoW: Forever addon that shows a "Check transmutes" reminder when your alchemy transmute cooldown is ready. No countdown bars, no timers on screen.
-
-## How it works
-
-- When you open your Alchemy window, the addon reads every recipe's cooldown. Recipes that share a cooldown become one entry. On Forever that means the Arcanite group (Arcanite, the elemental transmutes, Refined Scale of Onyxia and others) is one timer, while Iron to Gold and Mithril to Truesilver each have their own.
-- When you cast a transmute or another tracked recipe, it re-reads them all, so every group stays correct.
-- If the game gives no readable cooldown, it uses the length it saw last time, then the manual cooldown setting (default 36 hours, `/tmr hours <n>`).
-- Viewing someone else's profession (a link or a guild crafter) is never scanned.
-- When a cooldown ends, a small frame appears with which ones are ready. Left-click opens the recipe and dismisses it, right-click snoozes it, middle-click dismisses it. Drag it to move it.
-- Cooldowns are saved account-wide, so the reminder also tells you which alts have something ready.
-- Nothing is read or shown during combat.
+A WoW: Forever addon that pops up a small "Check transmutes" reminder when an alchemy transmute cooldown is ready. No countdown bars and no timers on screen: nothing shows until something is ready.
 
 ## Features
 
-- Custom reminder text (up to 40 characters), text color, font, and size
-- Show text, icon, or both, with a choice of icons
-- Background opacity, border, and a pulse or glow animation
-- Optional sound, repeat reminder, snooze, and chat message
-- Hide in combat, instances, or groups
-- Alt reminders, with a checklist to choose which cooldowns to remind about (untick Iron to Gold if you only care about Arcanite)
-- Minimap button and AddOn Compartment entry
-- 10 second preview from the options panel
+- **Reminder only when ready.** A small frame appears when a cooldown ends and lists what is ready.
+- **Knows which transmutes share a cooldown.** On Forever the Arcanite group (Arcanite and the elemental transmutes) is one timer, while Iron to Gold and Mithril to Truesilver each have their own. Each gets its own reminder.
+- **Works for cooldowns started before install.** Open your Alchemy window once and the addon reads every cooldown from the game.
+- **Other profession cooldowns too.** Any recipe on cooldown, such as Primal Mooncloth, is tracked when you open that profession.
+- **Alts.** Cooldowns are saved account-wide, so the reminder tells you when an alt has something ready.
+- **Click actions.** Left-click opens the recipe in your profession window, right-click snoozes, middle-click dismisses. Drag to move.
+- **Customizable.** Reminder text (up to 40 characters), text color, font, size, icon, background opacity, border, and a pulse or glow animation.
+- **Alerts.** Optional sound, repeat reminder, snooze length and chat message.
+- **Stays out of the way.** Never reads or shows anything in combat. Optional hiding in instances or groups.
+- **Choose what to track.** A checklist in the options to turn off any cooldown, for example Iron to Gold if you only care about Arcanite.
+- Minimap button and AddOn Compartment entry.
 
-## Options
+## Getting started
 
-Options > AddOns > TransmuteReminder holds every setting above plus the command list. `/tmr options` opens it.
+1. Install the addon and log in.
+2. Open your Alchemy window once on each alchemist. This records the current cooldowns.
+3. That's it. The reminder appears when a cooldown ends.
+
+Settings are in Options > AddOns > TransmuteReminder, or type `/tmr options`.
 
 ## Commands
 
-- `/tmr` shows the current status
-- `/tmr options` opens the options panel
-- `/tmr test` previews the frame for 10 seconds
-- `/tmr scan` scans the open Alchemy window and lists each recipe with its time left
-- `/tmr whatsnext` shows the next cooldown to finish
-- `/tmr reset` resets the frame position
-- `/tmr clear` clears this character's stored cooldowns
-- `/tmr lock` and `/tmr unlock` lock or unlock dragging
-- `/tmr minimap` shows or hides the minimap button
-- `/tmr alts` lists cooldowns on your other characters, `/tmr forget <name>` removes one
-- `/tmr hours <n>` sets the manual cooldown in hours
-- `/tmr scale <n>` sets the size from 0.5 to 3, `/tmr scale default` resets it
-- `/tmr message <text>` sets the reminder text, `/tmr message default` restores it
-- `/tmr debug` prints diagnostic info, `/tmr debug on` prints the spell ID of every cast
+| Command | What it does |
+| --- | --- |
+| `/tmr` | Show the status of every tracked cooldown |
+| `/tmr options` | Open the options panel |
+| `/tmr test` | Preview the reminder for 10 seconds |
+| `/tmr scan` | Scan the open Alchemy window and list each transmute with its time left |
+| `/tmr whatsnext` | Show the next cooldown to finish |
+| `/tmr alts` | List cooldowns on your other characters |
+| `/tmr forget <name>` | Remove a character you no longer play |
+| `/tmr clear` | Clear this character's stored cooldowns |
+| `/tmr reset` | Reset the reminder position |
+| `/tmr lock`, `/tmr unlock` | Lock or unlock dragging |
+| `/tmr minimap` | Show or hide the minimap button |
+| `/tmr message <text>` | Set the reminder text, or `/tmr message default` |
+| `/tmr scale <n>` | Set the size from 0.5 to 3, or `/tmr scale default` |
+| `/tmr hours <n>` | Set the manual cooldown, used when the game reports none |
+| `/tmr debug [on\|off]` | Diagnostic info; `on` also prints recipe IDs and raw values |
 
-## Tests
+## How it works
 
-`lua5.1 tests/run.lua` runs the addon against a mock of the WoW API. GitHub Actions runs it plus luacheck on every push.
+- Opening a profession window reads every learned recipe's cooldown. Recipes whose cooldowns match are grouped into one entry.
+- Casting a tracked recipe re-reads all of them, so casting one transmute never overwrites another.
+- If the game gives no readable cooldown, the addon uses the length it saw last time, then the manual cooldown setting (default 36 hours).
+- Someone else's profession (a link or a guild crafter) is never scanned.
 
-## Install
+## Development
 
-Copy the `TransmuteReminder` folder into your WoW: Forever `Interface\AddOns` folder, then `/reload`.
+```
+TransmuteReminder.toc   addon metadata and load order
+Core.lua                cooldown tracking, grouping, events, slash commands
+Popup.lua               reminder window, tooltip, minimap button
+Options.lua             settings panel
+tests/                  WoW API mock and test suite
+```
+
+- **Run the tests:** `lua5.1 tests/run.lua` from the repo root. It loads the addon against a mock of the WoW API.
+- **Lint:** `luacheck Core.lua Popup.lua Options.lua` (config in `.luacheckrc`).
+- **CI:** GitHub Actions runs both on every push and pull request.
+- **Local testing in game:** copy the TOC and the three `.lua` files into `World of Warcraft\_forever_\Interface\AddOns\TransmuteReminder\`, then `/reload`.
 
 ## Releasing
 
-Pushing a tag builds the addon with the BigWigs packager and uploads it to CurseForge.
+Pushing a version tag runs the tests, then builds the addon with the BigWigs packager and uploads it to CurseForge. `@project-version@` in the TOC is replaced with the tag.
+
+One-time setup:
 
 1. Create the CurseForge project and add `## X-Curse-Project-ID: <id>` to `TransmuteReminder.toc`.
-2. Add a `CF_API_KEY` secret in the repo's Settings, Secrets and variables, Actions.
-3. Push a tag, for example `git tag v0.1.0 && git push origin v0.1.0`.
+2. Add a `CF_API_KEY` secret under the repo's Settings > Secrets and variables > Actions.
 
-## Status
+Each release:
 
-Early version. Cooldown reading on Forever is still being verified in game.
+1. Move the "Unreleased" notes in `CHANGELOG.md` under the new version.
+2. `git tag v0.1.0 && git push origin v0.1.0`

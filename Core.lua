@@ -1,12 +1,22 @@
 -- TransmuteReminder: core logic
--- Tracks profession cooldowns as groups: recipes that report the same cooldown
--- share one entry (for example the Arcanite transmutes and Refined Scale of
--- Onyxia), while separate timers (Iron to Gold, Mithril to Truesilver) get their
--- own. Everything is stored account-wide so alts can be reported. The window
--- itself is in Popup.lua.
 --
--- Combat comes first: nothing here reads cooldowns, scans, or does work beyond a
--- cheap visibility check while you are in combat.
+-- Tracks profession cooldowns as groups. Recipes that report the same cooldown
+-- share one entry (the Arcanite transmutes on Forever), while separate timers
+-- (Iron to Gold, Mithril to Truesilver) get their own. Data is saved
+-- account-wide so alts can be reported.
+--
+-- Flow:
+--   1. Opening a profession window runs scan(), which reads every recipe's
+--      cooldown and builds the groups (regroup).
+--   2. Casting a known recipe runs after_cast(), which re-reads every known
+--      recipe so all groups stay correct.
+--   3. Update() decides whether the reminder shows; Popup.lua draws it.
+--
+-- Combat comes first: nothing here reads cooldowns, scans, or does work beyond
+-- a cheap visibility check while you are in combat.
+--
+-- Files: Core.lua (this), Popup.lua (window, tooltip, minimap button),
+-- Options.lua (settings panel). Shared state lives on the addon namespace (ns).
 
 local ADDON_NAME, ns = ...
 
@@ -49,7 +59,8 @@ ns.DEFAULTS = {
 
 local s, me, mykey -- settings, this character's record, its key
 
--- Runtime state (not saved)
+-- Runtime state (not saved). alerted maps a cooldown key to the expiry that
+-- already played its sound, so each cooldown alerts once.
 ns.alerted = {}
 ns.snoozeUntil = nil
 ns.lastAlert = nil
@@ -64,10 +75,11 @@ function ns.print(msg)
 end
 local print_msg = ns.print
 
+-- Midnight-era clients can hand addons "secret" values that cannot be read or
+-- compared. Anything secret is treated as unknown.
 local function is_secret(value)
     return issecretvalue ~= nil and issecretvalue(value)
 end
-ns.is_secret = is_secret
 
 function ns.format_duration(seconds)
     seconds = math.max(0, math.floor(seconds))
@@ -426,7 +438,6 @@ local function read_expiry(spellID)
     if remaining <= 0 then return nil end
     return GetServerTime() + remaining, duration
 end
-ns.read_expiry = read_expiry
 
 local function recipe_cooldown_seconds(recipeID)
     if not (C_TradeSkillUI and C_TradeSkillUI.GetRecipeCooldown) then return nil end
