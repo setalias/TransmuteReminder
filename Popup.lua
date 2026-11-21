@@ -139,6 +139,7 @@ local function set_animation(mode)
     f.pulse:Stop()
     f.glowAnim:Stop()
     f.glow:Hide()
+    f.glow:SetAlpha(1)
     f:SetAlpha(1)
     if mode == "pulse" then
         f.pulse:Play()
@@ -179,10 +180,14 @@ function ns.Popup_Create()
     f.sub:SetJustifyH("LEFT")
     f.sub:SetWidth(SUB_WIDTH)
 
-    f.glow = f:CreateTexture(nil, "OVERLAY")
-    f.glow:SetAllPoints()
-    f.glow:SetColorTexture(1, 0.82, 0.1, 0.35)
-    f.glow:SetBlendMode("ADD")
+    -- Glow: a gold outline just outside the frame that fades in and out,
+    -- so it never covers the text.
+    f.glow = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    f.glow:SetPoint("TOPLEFT", -5, 5)
+    f.glow:SetPoint("BOTTOMRIGHT", 5, -5)
+    f.glow:SetFrameLevel(math.max(0, (f:GetFrameLevel() or 1) - 1))
+    f.glow:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 16 })
+    f.glow:SetBackdropBorderColor(1, 0.82, 0.1, 1)
     f.glow:Hide()
 
     f.pulse = f:CreateAnimationGroup()
@@ -232,6 +237,7 @@ function ns.Popup_Create()
     f:SetScript("OnLeave", function() GameTooltip:Hide() end)
     f:SetScript("OnHide", function(self)
         self.animMode = nil
+        self.sig = nil
         self.pulse:Stop()
         self.glowAnim:Stop()
     end)
@@ -249,19 +255,20 @@ function ns.Popup_Set(state)
     local s = ns.s
 
     local primary = state.own[1] or state.alts[1]
-    local mainText
-    if primary and primary.key ~= ns.TRANSMUTE_KEY then
-        mainText = "Check " .. primary.name
-    else
-        mainText = ns.get_message()
-    end
+    local named = primary and not primary.transmute
+    local mainText = named and ("Check " .. primary.name) or ns.get_message()
 
-    -- Second line: other ready cooldowns on this character, then alts.
+    -- Second line: which of this character's cooldowns are ready, then alts.
     local parts = {}
-    if #state.own > 1 then
-        local names = {}
-        for i = 2, #state.own do names[#names + 1] = state.own[i].name end
-        parts[#parts + 1] = "Also ready: " .. table.concat(names, ", ")
+    local names = {}
+    for _, it in ipairs(state.own) do
+        if not it.fake and not (named and it == primary) then
+            names[#names + 1] = ns.short_label(it)
+        end
+    end
+    if #names > 0 then
+        parts[#parts + 1] = (named and state.own[1] == primary and "Also ready: " or "Ready: ")
+            .. table.concat(names, ", ")
     end
     if #state.alts > 0 then
         local order, byChar = {}, {}
@@ -270,7 +277,7 @@ function ns.Popup_Set(state)
                 byChar[it.char] = {}
                 order[#order + 1] = it.char
             end
-            table.insert(byChar[it.char], it.name)
+            table.insert(byChar[it.char], ns.short_label(it))
         end
         local chunks = {}
         for _, c in ipairs(order) do
@@ -284,6 +291,13 @@ function ns.Popup_Set(state)
     local showIcon = s.display ~= "text"
     local color = s.textColor
     local path = font_path()
+    local texture = icon_texture(primary)
+
+    -- Skip the rebuild when nothing visible changed (the 30 second check calls this).
+    local sig = table.concat({ mainText, subText, s.display, tostring(texture), path,
+        color[1], color[2], color[3], s.bgAlpha, tostring(s.border), s.animation }, "\031")
+    if f.sig == sig and f:IsShown() then return end
+    f.sig = sig
 
     f.main:SetFont(path, 18, "OUTLINE")
     f.main:SetTextColor(color[1], color[2], color[3])
@@ -299,7 +313,7 @@ function ns.Popup_Set(state)
 
     local leftX = PAD
     if showIcon then
-        f.icon:SetTexture(icon_texture(primary))
+        f.icon:SetTexture(texture)
         f.icon:ClearAllPoints()
         f.icon:SetPoint("LEFT", f, "LEFT", PAD, 0)
         f.icon:Show()

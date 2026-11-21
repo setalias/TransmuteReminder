@@ -1,7 +1,9 @@
 -- TransmuteReminder: core logic
--- Tracks profession cooldowns (transmutes first, other long cooldowns found by
--- scanning the profession window), stores them account-wide so alts can be
--- reported, and decides when the reminder shows. The window itself is in Popup.lua.
+-- Tracks profession cooldowns as groups: recipes that report the same cooldown
+-- share one entry (for example the Arcanite transmutes and Refined Scale of
+-- Onyxia), while separate timers (Iron to Gold, Mithril to Truesilver) get their
+-- own. Everything is stored account-wide so alts can be reported. The window
+-- itself is in Popup.lua.
 --
 -- Combat comes first: nothing here reads cooldowns, scans, or does work beyond a
 -- cheap visibility check while you are in combat.
@@ -12,13 +14,12 @@ ns.DEFAULT_MESSAGE = "Check transmutes"
 ns.MAX_MESSAGE_LENGTH = 40
 ns.MIN_SCALE = 0.5
 ns.MAX_SCALE = 3
-ns.TRANSMUTE_KEY = "transmute"
+ns.DATA_VERSION = 2
 
-local TRANSMUTE_KEY = ns.TRANSMUTE_KEY
 local MIN_REAL_COOLDOWN = 120  -- seconds; shorter spell cooldowns are treated as global cooldowns
 local CHECK_INTERVAL = 30      -- seconds between safety checks
 local AUTO_SCAN_THROTTLE = 10  -- seconds between automatic profession scans
-local TOLERANCE = 90           -- seconds; smaller differences are not announced again
+local TOLERANCE = 90           -- seconds; cooldowns this close are the same group, and smaller changes are not announced
 local PREVIEW_SECONDS = 10
 
 ns.DEFAULTS = {
@@ -42,7 +43,7 @@ ns.DEFAULTS = {
     minimapAngle = 215,
     remindAlts = true,
     clickOpens = true,
-    hours = 20,                -- fallback transmute cooldown if the game gives none
+    hours = 36,                -- last-resort cooldown if the game gives none and none was seen before
     debug = false,
 }
 
@@ -50,8 +51,6 @@ local s, me, mykey -- settings, this character's record, its key
 
 -- Runtime state (not saved)
 ns.alerted = {}
-ns.altsAlerted = false
-ns.altsDismissed = false
 ns.snoozeUntil = nil
 ns.lastAlert = nil
 ns.previewUntil = nil
@@ -120,8 +119,29 @@ local function get_spell_cooldown(spellID)
     return nil
 end
 
+-- Transmute recipe IDs seen on Forever. Used so detection does not depend on the
+-- client language; the English name check covers anything not listed.
+local KNOWN_TRANSMUTES = {
+    [11479] = true, [11480] = true, [17187] = true, [17559] = true, [17560] = true,
+    [17561] = true, [17562] = true, [17563] = true, [17564] = true, [17565] = true,
+    [17566] = true, [25146] = true, [1317279] = true,
+}
+
 local function is_transmute_name(name)
     return type(name) == "string" and not is_secret(name) and name:find("^Transmut") ~= nil
+end
+
+local function is_transmute(id, name)
+    return KNOWN_TRANSMUTES[id] == true or is_transmute_name(name)
+end
+
+-- "Transmute: Arcanite" -> "Arcanite" for short lists.
+function ns.short_label(item)
+    local name = item.name or "?"
+    if item.transmute then
+        return (name:gsub("^[^:]+:%s*", ""))
+    end
+    return name
 end
 
 local function short_name(ckey)
@@ -148,29 +168,22 @@ local function init_db()
     mykey = (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?")
     me = acct.chars[mykey] or {}
     acct.chars[mykey] = me
-    me.cooldowns = me.cooldowns or {}
-    me.dismissed = me.dismissed or {}
-    me.class = select(2, UnitClass("player"))
 
-    -- Carry over data from the first version, which saved per character.
-    local old = TransmuteReminderDB
-    if type(old) == "table" and not old.migrated then
-        if not acct.settingsMigrated then
-            for _, k in ipairs({ "message", "scale", "point", "hours" }) do
-                if old[k] ~= nil then s[k] = old[k] end
-            end
-            acct.settingsMigrated = true
+    -- Cooldowns saved before groups existed use different keys, so start over.
+    if acct.version ~= ns.DATA_VERSION then
+        for _, c in pairs(acct.chars) do
+            c.cooldowns, c.dismissed, c.altDismissed, c.recipes = nil, nil, nil, nil
+            c.transmutes, c.recipeID = nil, nil
         end
-        if old.expiry and not me.cooldowns[TRANSMUTE_KEY] then
-            me.cooldowns[TRANSMUTE_KEY] = {
-                name = "Transmutes",
-                expiry = old.expiry,
-                spellID = old.spellID,
-                recipeID = old.spellID,
-            }
-        end
-        old.migrated = true
+        s.disabled = {}
+        acct.version = ns.DATA_VERSION
     end
+
+    me.cooldowns = me.cooldowns or {}     -- [groupKey] = { name, expiry, recipeID, icon, count, transmute, duration }
+    me.recipes = me.recipes or {}         -- [recipeID] = { name, icon, transmute, group, duration }
+    me.dismissed = me.dismissed or {}     -- [groupKey] = expiry dismissed
+    me.altDismissed = me.altDismissed or {} -- ["Char-Realm|groupKey"] = expiry dismissed
+    me.class = select(2, UnitClass("player"))
 
     ns.acct, ns.s, ns.me, ns.mykey = acct, s, me, mykey
 end
@@ -216,7 +229,7 @@ end
 local function sort_items(list)
     table.sort(list, function(a, b)
         if (a.char or "") ~= (b.char or "") then return (a.char or "") < (b.char or "") end
-        local at, bt = a.key == TRANSMUTE_KEY, b.key == TRANSMUTE_KEY
+        local at, bt = a.transmute == true, b.transmute == true
         if at ~= bt then return at end
         return (a.name or "") < (b.name or "")
     end)
@@ -237,6 +250,8 @@ function ns.own_items()
                 dismissed = me.dismissed[key] == e.expiry,
                 icon = e.icon,
                 recipeID = e.recipeID,
+                transmute = e.transmute,
+                count = e.count,
             }
         end
     end
@@ -266,6 +281,9 @@ function ns.alt_items()
                         name = e.name or key,
                         expiry = e.expiry,
                         ready = e.expiry <= now,
+                        dismissed = me.altDismissed[ckey .. "|" .. key] == e.expiry,
+                        icon = e.icon,
+                        transmute = e.transmute,
                     }
                 end
             end
@@ -277,23 +295,26 @@ end
 function ns.ready_alts()
     local list = {}
     for _, it in ipairs(ns.alt_items()) do
-        if it.ready then list[#list + 1] = it end
+        if it.ready and not it.dismissed then list[#list + 1] = it end
     end
     return list
 end
 
 -- Every cooldown name known on any character, for the checklist in the options.
 function ns.all_keys()
-    local names = {}
+    local byKey = {}
     for _, c in pairs(ns.acct.chars) do
         if type(c.cooldowns) == "table" then
             for key, e in pairs(c.cooldowns) do
-                names[key] = e.name or key
+                local prev = byKey[key]
+                if not prev or (e.count or 1) > (prev.count or 1) then
+                    byKey[key] = { key = key, name = e.name or key, count = e.count or 1, transmute = e.transmute }
+                end
             end
         end
     end
     local list = {}
-    for key, name in pairs(names) do list[#list + 1] = { key = key, name = name } end
+    for _, it in pairs(byKey) do list[#list + 1] = it end
     sort_items(list)
     return list
 end
@@ -344,7 +365,7 @@ function ns.set_cooldown(key, name, expiry, source, extra)
     e.expiry = expiry
     if extra then
         for k, v in pairs(extra) do
-            if v ~= nil then e[k] = v end
+            if v ~= nil and k ~= "estimated" then e[k] = v end
         end
     end
     me.cooldowns[key] = e
@@ -352,30 +373,45 @@ function ns.set_cooldown(key, name, expiry, source, extra)
     ns.alerted[key] = nil
     ns.schedule(expiry)
     ns.Update()
-    local label = (key == TRANSMUTE_KEY) and "transmute" or name
-    print_msg(string.format("next %s ready in %s (%s).",
-        label, ns.format_duration(expiry - GetServerTime()), source))
+    local note = ""
+    if s.debug then
+        note = " (" .. source .. ")"
+    elseif extra and extra.estimated then
+        note = " (estimated)"
+    end
+    print_msg(string.format("next %s ready in %s%s.",
+        ns.short_label(e), ns.format_duration(expiry - GetServerTime()), note))
+    if ns.Options_Refresh then ns.Options_Refresh() end
 end
 
+local scheduled = {}
 function ns.schedule(expiry)
     local remaining = expiry - GetServerTime()
-    if remaining > 0 and remaining < 86400 * 30 then
-        C_Timer.After(remaining + 1, ns.Update)
+    if remaining > 0 and remaining < 86400 * 30 and not scheduled[expiry] then
+        scheduled[expiry] = true
+        C_Timer.After(remaining + 1, function()
+            scheduled[expiry] = nil
+            ns.Update()
+        end)
     end
 end
 
 function ns.ClearOwn()
     wipe(me.cooldowns)
+    wipe(me.recipes)
     wipe(me.dismissed)
     wipe(ns.alerted)
+    me.transmutes = nil
     ns.Update()
+    if ns.Options_Refresh then ns.Options_Refresh() end
 end
 
 ---------------------------------------------------------------------------
 -- Reading cooldowns from the game (never in combat)
 ---------------------------------------------------------------------------
 
--- Returns an expiry timestamp (server time) from a spell's cooldown, or nil.
+-- Returns an expiry timestamp (server time) and the full duration from a
+-- spell's cooldown, or nil.
 local function read_expiry(spellID)
     if InCombatLockdown() then return nil end
     local start, duration = get_spell_cooldown(spellID)
@@ -384,7 +420,7 @@ local function read_expiry(spellID)
     if duration < MIN_REAL_COOLDOWN or start <= 0 then return nil end
     local remaining = (start + duration) - GetTime()
     if remaining <= 0 then return nil end
-    return GetServerTime() + remaining
+    return GetServerTime() + remaining, duration
 end
 ns.read_expiry = read_expiry
 
@@ -395,16 +431,151 @@ local function recipe_cooldown_seconds(recipeID)
     return cd
 end
 
-local function after_transmute_cast(spellID, name)
-    local expiry = read_expiry(spellID)
-    local extra = { spellID = spellID, recipeID = spellID, icon = get_spell_texture(spellID) }
-    if expiry then
-        ns.set_cooldown(TRANSMUTE_KEY, "Transmutes", expiry, "read from game", extra)
+---------------------------------------------------------------------------
+-- Grouping
+-- A reading is { id, name, icon, transmute, remaining, duration }. Recipes
+-- whose remaining time matches within TOLERANCE share a cooldown and become one
+-- group, keyed by its representative recipe (the lowest transmute ID, else the
+-- lowest ID). Recipes that are ready keep the group they were last seen in.
+---------------------------------------------------------------------------
+
+local function apply_group(key, info, expiry, source, manual)
+    local e = me.cooldowns[key]
+    if manual or not e or math.abs(e.expiry - expiry) > TOLERANCE then
+        ns.set_cooldown(key, info.name, expiry, source, info)
+    else
+        for k, v in pairs(info) do
+            if v ~= nil then e[k] = v end
+        end
+    end
+end
+
+local function prune_groups()
+    local used = {}
+    for _, rec in pairs(me.recipes) do
+        if rec.group then used[rec.group] = true end
+    end
+    for key in pairs(me.cooldowns) do
+        if not used[key] then
+            me.cooldowns[key] = nil
+            me.dismissed[key] = nil
+        end
+    end
+end
+
+local function regroup(readings, source, manual)
+    local now = GetServerTime()
+    local oncd = {}
+    for _, r in ipairs(readings) do
+        local rec = me.recipes[r.id] or {}
+        rec.name, rec.icon = r.name, r.icon or rec.icon
+        rec.transmute = r.transmute or nil
+        if r.duration and r.duration >= MIN_REAL_COOLDOWN then rec.duration = r.duration end
+        me.recipes[r.id] = rec
+        if r.remaining then oncd[#oncd + 1] = r end
+    end
+
+    table.sort(oncd, function(x, y) return x.remaining < y.remaining end)
+    local clusters = {}
+    for _, r in ipairs(oncd) do
+        local c = clusters[#clusters]
+        if c and math.abs(r.remaining - c.base) <= TOLERANCE then
+            c.members[#c.members + 1] = r
+        else
+            clusters[#clusters + 1] = { base = r.remaining, members = { r } }
+        end
+    end
+
+    for _, c in ipairs(clusters) do
+        local rep, repT
+        for _, r in ipairs(c.members) do
+            if r.transmute and (not repT or r.id < repT.id) then repT = r end
+            if not rep or r.id < rep.id then rep = r end
+        end
+        rep = repT or rep
+        local key = "g:" .. rep.id
+        for _, r in ipairs(c.members) do me.recipes[r.id].group = key end
+        local old = me.cooldowns[key]
+        local duration = me.recipes[rep.id].duration or (old and old.duration)
+        apply_group(key, {
+            name = rep.name,
+            icon = rep.icon,
+            recipeID = rep.id,
+            count = #c.members,
+            transmute = repT ~= nil,
+            duration = duration,
+        }, now + rep.remaining, source, manual)
+    end
+
+    prune_groups()
+end
+
+---------------------------------------------------------------------------
+-- Casting
+---------------------------------------------------------------------------
+
+local function read_recipe(id, rec)
+    local name = (rec and rec.name) or get_spell_name(id)
+    local expiry, duration = read_expiry(id)
+    return {
+        id = id,
+        name = name,
+        icon = (rec and rec.icon) or get_spell_texture(id),
+        transmute = (rec and rec.transmute) or is_transmute(id, name),
+        remaining = expiry and (expiry - GetServerTime()) or nil,
+        duration = duration,
+    }
+end
+
+local function after_cast(spellID)
+    if InCombatLockdown() then return end
+    -- Re-read every recipe we know, so every group sharing the cooldown moves.
+    local readings, castReading = {}, nil
+    for id, rec in pairs(me.recipes) do
+        local r = read_recipe(id, rec)
+        readings[#readings + 1] = r
+        if id == spellID then castReading = r end
+    end
+    if not castReading then
+        castReading = read_recipe(spellID, nil)
+        readings[#readings + 1] = castReading
+    end
+    if not castReading.name then return end
+
+    if castReading.remaining then
+        regroup(readings, "read from game", false)
         return
     end
-    local hours = s.hours or 20
-    ns.set_cooldown(TRANSMUTE_KEY, "Transmutes", GetServerTime() + hours * 3600,
-        string.format("fallback of %s hours, game gave no cooldown", hours), extra)
+
+    -- No readable cooldown: use the length seen last time, then the setting.
+    for i = #readings, 1, -1 do
+        if readings[i].id == spellID then table.remove(readings, i) end
+    end
+    regroup(readings, "read from game", false)
+    local rec = me.recipes[spellID] or {}
+    rec.name = castReading.name
+    rec.icon = rec.icon or castReading.icon
+    rec.transmute = castReading.transmute or nil
+    me.recipes[spellID] = rec
+    local key = rec.group or ("g:" .. spellID)
+    rec.group = key
+    local old = me.cooldowns[key]
+    local duration = rec.duration or (old and old.duration)
+    local source
+    if duration then
+        source = "using the last cooldown length seen"
+    else
+        duration = (s.hours or 36) * 3600
+        source = string.format("fallback of %s hours, game gave no cooldown", s.hours or 36)
+    end
+    ns.set_cooldown(key, (old and old.name) or rec.name, GetServerTime() + duration, source, {
+        icon = rec.icon,
+        recipeID = (old and old.recipeID) or spellID,
+        count = (old and old.count) or 1,
+        transmute = (old and old.transmute) or rec.transmute,
+        duration = old and old.duration,
+        estimated = true,
+    })
 end
 
 local function on_cast(spellID)
@@ -412,30 +583,37 @@ local function on_cast(spellID)
     if s.debug then
         print_msg(string.format("cast: %s (%s)", tostring(name), tostring(spellID)))
     end
-    if is_transmute_name(name) then
+    if me.recipes[spellID] or is_transmute(spellID, name) then
         -- Give the game a moment to apply the cooldown before reading it.
-        C_Timer.After(1.5, function() after_transmute_cast(spellID, name) end)
-    elseif type(name) == "string" and not is_secret(name) and me.cooldowns["r:" .. name] then
-        C_Timer.After(1.5, function()
-            local expiry = read_expiry(spellID)
-            if expiry then
-                ns.set_cooldown("r:" .. name, name, expiry, "read from game", { spellID = spellID })
-            end
-        end)
+        C_Timer.After(1.5, function() after_cast(spellID) end)
     end
 end
 
 ---------------------------------------------------------------------------
 -- Profession window scan
--- Picks up cooldowns that started before install, and any other recipe that
--- has a cooldown. Needs the profession window open.
+-- Picks up cooldowns that started before install. Needs the profession window
+-- open, and only scans your own professions.
 ---------------------------------------------------------------------------
 
 local last_scan = 0
 local scan_queued = false
 
--- Returns { name, id, icon, viaRecipe, viaSpell, remaining } for each transmute
--- recipe and each recipe currently on cooldown in the open profession.
+local function flag(fn)
+    if type(fn) ~= "function" then return false end
+    local ok, v = pcall(fn)
+    return ok and v and true or false
+end
+
+local function viewing_someone_else()
+    local ui = C_TradeSkillUI
+    if ui and (flag(ui.IsTradeSkillLinked) or flag(ui.IsTradeSkillGuild)
+        or flag(ui.IsNPCCrafting) or flag(ui.IsTradeSkillGuildMember)) then
+        return true
+    end
+    return flag(_G.IsTradeSkillLinked) or flag(_G.IsTradeSkillGuild)
+end
+
+-- Readings for each transmute recipe and each recipe currently on cooldown.
 local function collect()
     local results = {}
 
@@ -447,30 +625,33 @@ local function collect()
                 if okInfo and type(info) == "table" and type(info.name) == "string" and not is_secret(info.name)
                     and info.learned ~= false then
                     local viaRecipe = recipe_cooldown_seconds(id)
-                    local viaSpell
-                    local expiry = read_expiry(id)
-                    if expiry then viaSpell = expiry - GetServerTime() end
+                    local viaSpell, duration
+                    local expiry, dur = read_expiry(id)
+                    if expiry then viaSpell, duration = expiry - GetServerTime(), dur end
                     local remaining = viaRecipe
                     if not remaining or remaining <= 0 then remaining = viaSpell end
                     if not remaining or remaining <= 0 then remaining = nil end
-                    if is_transmute_name(info.name) or remaining then
+                    local transmute = is_transmute(id, info.name)
+                    if transmute or remaining then
                         results[#results + 1] = {
-                            name = info.name, id = id, icon = info.icon,
-                            viaRecipe = viaRecipe, viaSpell = viaSpell, remaining = remaining,
+                            id = id, name = info.name, icon = info.icon, transmute = transmute,
+                            remaining = remaining, duration = duration,
+                            viaRecipe = viaRecipe, viaSpell = viaSpell,
                         }
                     end
                 end
             end
         end
     elseif GetNumTradeSkills and GetTradeSkillInfo then
-        -- Classic-style API
+        -- Classic-style API (index-based, so recipes are keyed by name there)
         for i = 1, GetNumTradeSkills() do
             local name, kind = GetTradeSkillInfo(i)
             if kind ~= "header" and type(name) == "string" then
                 local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i) or nil
                 if cd and cd <= 0 then cd = nil end
-                if is_transmute_name(name) or cd then
-                    results[#results + 1] = { name = name, id = i, viaRecipe = cd, remaining = cd }
+                local transmute = is_transmute_name(name)
+                if transmute or cd then
+                    results[#results + 1] = { id = name, name = name, transmute = transmute, remaining = cd, viaRecipe = cd }
                 end
             end
         end
@@ -485,46 +666,14 @@ function ns.scan(manual)
         if manual then print_msg("can't scan in combat.") end
         return
     end
+    if viewing_someone_else() then
+        if manual then print_msg("that is someone else's profession, so it was not scanned.") end
+        return
+    end
     if not manual and (GetTime() - last_scan) < AUTO_SCAN_THROTTLE then return end
     last_scan = GetTime()
 
     local results = collect()
-    local transmuteNames, firstTransmuteID = {}, nil
-    local bestRem, bestRec
-    local others = {}
-
-    for _, r in ipairs(results) do
-        if is_transmute_name(r.name) then
-            transmuteNames[#transmuteNames + 1] = r.name
-            firstTransmuteID = firstTransmuteID or r.id
-            if r.remaining and (not bestRem or r.remaining < bestRem) then
-                bestRem, bestRec = r.remaining, r
-            end
-        elseif r.remaining then
-            others[#others + 1] = r
-        end
-    end
-
-    -- A recipe that reports the same cooldown as any transmute is sharing it
-    -- (Refined Scale of Onyxia shares the Arcanite group's cooldown), so it is
-    -- not tracked separately.
-    local kept = {}
-    for _, r in ipairs(others) do
-        local shared = false
-        for _, tr in ipairs(results) do
-            if is_transmute_name(tr.name) and tr.remaining
-                and math.abs(tr.remaining - r.remaining) <= TOLERANCE then
-                shared = true
-                break
-            end
-        end
-        if shared then
-            me.cooldowns["r:" .. r.name] = nil
-        else
-            kept[#kept + 1] = r
-        end
-    end
-    others = kept
 
     if manual then
         if #results == 0 then
@@ -540,7 +689,7 @@ function ns.scan(manual)
                 local suffix = ""
                 if r.remaining then
                     suffix = " - " .. ns.format_duration(r.remaining)
-                elseif is_transmute_name(r.name) then
+                elseif r.transmute then
                     suffix = " - ready"
                 end
                 print_msg("  " .. r.name .. suffix)
@@ -548,35 +697,22 @@ function ns.scan(manual)
         end
     end
 
-    if #transmuteNames > 0 then
-        table.sort(transmuteNames)
-        me.transmutes = transmuteNames
-        me.recipeID = firstTransmuteID
+    local names, anyCooldown = {}, false
+    for _, r in ipairs(results) do
+        if r.transmute then names[#names + 1] = r.name end
+        if r.remaining then anyCooldown = true end
+    end
+    if #names > 0 then
+        table.sort(names)
+        me.transmutes = names
     end
 
-    local function apply(key, name, remaining, r)
-        local expiry = GetServerTime() + remaining
-        local e = me.cooldowns[key]
-        local extra = { recipeID = r.id, icon = r.icon }
-        -- Skip tiny differences so reopening the window does not repeat the message.
-        if manual or not e or math.abs(e.expiry - expiry) > TOLERANCE then
-            ns.set_cooldown(key, name, expiry, "scanned from profession window", extra)
-        else
-            e.recipeID = e.recipeID or r.id
-            e.icon = e.icon or r.icon
-        end
-    end
+    regroup(results, "scanned from profession window", manual)
 
-    if bestRem then
-        apply(TRANSMUTE_KEY, "Transmutes", bestRem, bestRec)
-    end
-    for _, r in ipairs(others) do
-        apply("r:" .. r.name, r.name, r.remaining, r)
-    end
-
-    if manual and not bestRem and #others == 0 then
+    if manual and not anyCooldown then
         print_msg("nothing is on cooldown, or the game gave no readable cooldown.")
     end
+    if ns.Options_Refresh then ns.Options_Refresh() end
 end
 
 local function queue_scan()
@@ -629,8 +765,8 @@ local function alert(own, alts)
     if s.sound ~= "none" then ns.play_sound(s.sound) end
     if s.chat then
         local names = {}
-        for _, it in ipairs(own) do names[#names + 1] = it.name end
-        for _, it in ipairs(alts) do names[#names + 1] = it.char .. " (" .. it.name .. ")" end
+        for _, it in ipairs(own) do names[#names + 1] = ns.short_label(it) end
+        for _, it in ipairs(alts) do names[#names + 1] = it.char .. " (" .. ns.short_label(it) .. ")" end
         print_msg("ready: " .. table.concat(names, ", "))
     end
 end
@@ -639,7 +775,9 @@ function ns.Dismiss()
     for _, it in ipairs(ns.ready_own()) do
         me.dismissed[it.key] = it.expiry
     end
-    ns.altsDismissed = true
+    for _, it in ipairs(ns.ready_alts()) do
+        me.altDismissed[it.charKey .. "|" .. it.key] = it.expiry
+    end
     ns.snoozeUntil = nil
     ns.previewUntil = nil
     ns.Update()
@@ -654,7 +792,6 @@ function ns.Snooze()
     ns.snoozeUntil = GetServerTime() + minutes * 60
     ns.previewUntil = nil
     wipe(ns.alerted)
-    ns.altsAlerted = false
     ns.lastAlert = nil
     ns.Update()
     C_Timer.After(minutes * 60 + 1, ns.Update)
@@ -663,8 +800,15 @@ end
 
 function ns.OpenProfession()
     if InCombatLockdown() then return false end
-    local own = ns.ready_own()
-    local id = (own[1] and own[1].recipeID) or me.recipeID
+    local id
+    for _, it in ipairs(ns.ready_own()) do
+        if it.recipeID then id = it.recipeID; break end
+    end
+    if not id then
+        for _, it in ipairs(ns.own_items()) do
+            if it.transmute and it.recipeID then id = it.recipeID; break end
+        end
+    end
     if not id then return false end
     if C_TradeSkillUI and C_TradeSkillUI.OpenRecipe then
         return (pcall(C_TradeSkillUI.OpenRecipe, id))
@@ -708,7 +852,7 @@ function ns.Update()
     if ns.previewUntil then
         local own = ns.ready_own()
         if #own == 0 then
-            own = { { key = TRANSMUTE_KEY, name = "Transmutes" } }
+            own = { { key = "preview", name = "Transmutes", transmute = true, fake = true } }
         end
         set_popup({ own = own, alts = {}, preview = true })
         return
@@ -716,7 +860,7 @@ function ns.Update()
 
     local now = GetServerTime()
     local own = ns.ready_own()
-    local alts = (s.remindAlts and not ns.altsDismissed) and ns.ready_alts() or {}
+    local alts = s.remindAlts and ns.ready_alts() or {}
     local snoozed = ns.snoozeUntil and now < ns.snoozeUntil
     if ns.snoozeUntil and not snoozed then ns.snoozeUntil = nil end
 
@@ -733,9 +877,12 @@ function ns.Update()
             need = true
         end
     end
-    if #alts > 0 and not ns.altsAlerted then
-        ns.altsAlerted = true
-        need = true
+    for _, it in ipairs(alts) do
+        local k = it.charKey .. "|" .. it.key
+        if ns.alerted[k] ~= it.expiry then
+            ns.alerted[k] = it.expiry
+            need = true
+        end
     end
     if s.repeatMinutes > 0 and ns.lastAlert and (now - ns.lastAlert) >= s.repeatMinutes * 60 then
         need = true
@@ -771,8 +918,10 @@ events:SetScript("OnEvent", function(self, event, ...)
         self:RegisterEvent("TRADE_SKILL_SHOW")
         self:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 
-        for _, e in pairs(me.cooldowns) do
-            if type(e.expiry) == "number" then ns.schedule(e.expiry) end
+        for _, c in pairs(ns.acct.chars) do
+            for _, e in pairs(c.cooldowns or {}) do
+                if type(e.expiry) == "number" then ns.schedule(e.expiry) end
+            end
         end
         C_Timer.NewTicker(CHECK_INTERVAL, ns.Update)
         ns.Update()
@@ -786,17 +935,8 @@ events:SetScript("OnEvent", function(self, event, ...)
     elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" then
         queue_scan()
 
-    elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Out of combat again: refresh the transmute time from the game if we can.
-        local e = me.cooldowns[TRANSMUTE_KEY]
-        if e and e.spellID and e.expiry > GetServerTime() then
-            local expiry = read_expiry(e.spellID)
-            if expiry then e.expiry = expiry end
-        end
-        ns.Update()
-
     else
-        -- PLAYER_REGEN_DISABLED, PLAYER_ENTERING_WORLD, ZONE_CHANGED_NEW_AREA, GROUP_ROSTER_UPDATE
+        -- PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED, PLAYER_ENTERING_WORLD, ZONE_CHANGED_NEW_AREA, GROUP_ROSTER_UPDATE
         ns.Update()
     end
 end)
@@ -871,7 +1011,7 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         local hours = tonumber(arg)
         if hours and hours > 0 then
             s.hours = hours
-            print_msg(string.format("fallback cooldown set to %s hours.", hours))
+            print_msg(string.format("last-resort cooldown set to %s hours.", hours))
         else
             print_msg("usage: /tmr hours <number>")
         end
@@ -882,7 +1022,7 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             local now = GetServerTime()
             for _, it in ipairs(alts) do
-                print_msg(string.format("  %s, %s: %s", it.char, it.name,
+                print_msg(string.format("  %s, %s: %s", it.char, ns.short_label(it),
                     it.ready and "ready" or ("ready in " .. ns.format_duration(it.expiry - now))))
             end
         end
@@ -897,6 +1037,9 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             ns.acct.chars[ckey] = nil
             ns.Update()
+            for k in pairs(me.altDismissed) do
+                if k:sub(1, #ckey + 1) == ckey .. "|" then me.altDismissed[k] = nil end
+            end
             print_msg(short_name(ckey) .. " forgotten.")
         end
     elseif cmd == "debug" then
@@ -909,18 +1052,12 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             print_msg("debug state:")
             for key, e in pairs(me.cooldowns) do
-                print_msg(string.format("  %s: expiry=%s spellID=%s recipeID=%s",
-                    key, tostring(e.expiry), tostring(e.spellID), tostring(e.recipeID)))
+                print_msg(string.format("  %s (%s): expiry=%s duration=%s recipes=%s transmute=%s",
+                    key, tostring(e.name), tostring(e.expiry), tostring(e.duration),
+                    tostring(e.count), tostring(e.transmute)))
             end
             print_msg("  C_TradeSkillUI present: " .. tostring(C_TradeSkillUI ~= nil))
             print_msg("  issecretvalue present: " .. tostring(issecretvalue ~= nil))
-            local e = me.cooldowns[TRANSMUTE_KEY]
-            if e and e.spellID then
-                local start, duration = get_spell_cooldown(e.spellID)
-                print_msg(string.format("  game cooldown: start=%s duration=%s secret=%s",
-                    tostring(start), tostring(duration),
-                    tostring(is_secret(start) or is_secret(duration))))
-            end
             print_msg("  tip: open your Alchemy window and run /tmr scan to see what the game reports.")
         end
     else

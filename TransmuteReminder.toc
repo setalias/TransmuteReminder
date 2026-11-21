@@ -1,12 +1,11 @@
 ## Interface: 16001
 ## Title: TransmuteReminder
-## Notes: Shows a reminder when your alchemy transmute cooldown is ready. No countdown bars.
+## Notes: Shows a reminder when a transmute or other profession cooldown is ready. No countdown bars.
 ## Author: setalias
 ## Version: @project-version@
 ## Category: Professions
 ## IconTexture: Interface\Icons\Trade_Alchemy
 ## SavedVariables: TransmuteReminderAccountDB
-## SavedVariablesPerCharacter: TransmuteReminderDB
 ## AddonCompartmentFunc: TransmuteReminder_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: TransmuteReminder_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: TransmuteReminder_OnAddonCompartmentLeave

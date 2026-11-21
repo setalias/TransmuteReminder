@@ -8,3 +8,5 @@ ignore:
   - README.md
   - .github
   - .gitignore
+  - .luacheckrc
+  - tests

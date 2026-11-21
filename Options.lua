@@ -235,7 +235,9 @@ function ns.Options_Create()
                 end
                 return y - 52
             end,
-            refresh = function() box:SetText(get()) end,
+            refresh = function()
+                if not box:HasFocus() then box:SetText(get()) end
+            end,
         })
     end
 
@@ -254,7 +256,8 @@ function ns.Options_Create()
     })
 
     text_block("GameFontHighlight",
-        "Shows a reminder when your alchemy transmute cooldown is ready. No countdown bars. "
+        "Shows a reminder when a transmute or other profession cooldown is ready. No countdown bars. "
+        .. "Recipes that share a cooldown are grouped into one entry. "
         .. "Left-click the reminder to open the recipe, right-click to snooze, drag to move it.")
 
     local status = text_block("GameFontNormal", "")
@@ -266,7 +269,7 @@ function ns.Options_Create()
     header("Cooldowns to remind about")
     local rows = {}
     local none = content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
-    none:SetText("Nothing recorded yet. Cast a transmute or open your Alchemy window.")
+    none:SetText("Nothing recorded yet. Open your Alchemy window or cast a transmute.")
     local checklist = add({})
     checklist.refresh = function()
         local keys = ns.all_keys()
@@ -286,7 +289,11 @@ function ns.Options_Create()
                 rows[i] = row
             end
             row.cb.key = k.key
-            row.fs:SetText(k.name)
+            if (k.count or 1) > 1 then
+                row.fs:SetText(string.format("%s  |cff888888(shared by %d recipes)|r", ns.escape_pipes(k.name), k.count))
+            else
+                row.fs:SetText(ns.escape_pipes(k.name))
+            end
             row.cb:SetChecked(not ns.s.disabled[k.key])
             row.cb:Show()
             row.fs:Show()
@@ -317,7 +324,7 @@ function ns.Options_Create()
     header("Actions")
     button_row({
         { label = "Show reminder", width = 130, x = 0, onclick = function() ns.Preview() end },
-        { label = "Scan Alchemy window", width = 160, x = 140, onclick = function() ns.scan(true) end },
+        { label = "Scan Alchemy window", width = 160, x = 140, onclick = function() ns.scan(true); refresh_all() end },
         { label = "Reset position", width = 120, x = 310, onclick = function() SlashCmdList["TRANSMUTEREMINDER"]("reset") end },
         { label = "Clear cooldowns", width = 120, x = 440, onclick = function()
             SlashCmdList["TRANSMUTEREMINDER"]("clear")
@@ -442,7 +449,7 @@ function ns.Options_Create()
         function(v) s.hideGroup = v; ns.Update() end)
     check("Remind about cooldowns ready on other characters",
         function() return s.remindAlts end,
-        function(v) s.remindAlts = v; ns.altsDismissed = false; ns.altsAlerted = false; ns.Update() end)
+        function(v) s.remindAlts = v; ns.Update() end)
     check("Left-click opens the recipe",
         function() return s.clickOpens end,
         function(v) s.clickOpens = v end)
@@ -451,7 +458,7 @@ function ns.Options_Create()
         function(v) s.minimapHide = not v; ns.Minimap_Update() end)
 
     header("Advanced")
-    edit_row("Fallback transmute cooldown in hours (used only if the game gives none)",
+    edit_row("Last-resort cooldown in hours (used only if the game gives no cooldown and none was seen before)",
         function() return tostring(s.hours) end,
         function(text)
             local n = tonumber(text)
@@ -471,13 +478,16 @@ function ns.Options_Create()
         .. "/tmr minimap    Show or hide the minimap button\n"
         .. "/tmr message <text>    Set the reminder text, or /tmr message default\n"
         .. "/tmr scale <n>    Set the size from " .. ns.MIN_SCALE .. " to " .. ns.MAX_SCALE .. ", or /tmr scale default\n"
-        .. "/tmr hours <n>    Set the fallback cooldown length in hours\n"
+        .. "/tmr hours <n>    Set the last-resort cooldown length in hours\n"
         .. "/tmr alts    List cooldowns recorded on other characters\n"
         .. "/tmr forget <name>    Remove a character you no longer play\n"
         .. "/tmr debug [on|off]    Print diagnostic info, or every cast's spell ID")
 
     panel.refresh = refresh_all
     panel:SetScript("OnShow", refresh_all)
+    ns.Options_Refresh = function()
+        if panel:IsVisible() then refresh_all() end
+    end
 
     settings_category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
     Settings.RegisterAddOnCategory(settings_category)
