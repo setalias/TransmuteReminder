@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0
+
+- Split the addon into Core, Popup, and Options files.
+- Cooldowns now save account-wide. Alts with a ready cooldown can trigger the reminder.
+- Tracks other cooldown recipes besides transmutes, with a checklist to choose what to remind about.
+- Click actions: left-click opens the recipe, right-click snoozes, middle-click dismisses.
+- New look options: text color, font, icon choice, display mode, background opacity, border, pulse or glow animation.
+- Optional sound, repeat reminder, snooze length, and chat message.
+- Hide in combat, instances, or groups. No cooldown reads happen in combat.
+- Minimap button, AddOn Compartment entry, lock option, 10 second preview.
+- New commands: `/tmr lock`, `/tmr unlock`, `/tmr minimap`, `/tmr alts`, `/tmr forget`.
+- Settings from 0.1.0 are migrated automatically.
+
 ## 0.1.0
 
 - First release for WoW: Forever.
