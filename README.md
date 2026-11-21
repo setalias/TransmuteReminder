@@ -1,6 +1,6 @@
 # TransmuteReminder
 
-A WoW: Forever addon that pops up a small "Check transmutes" reminder when an alchemy transmute cooldown is ready. No countdown bars and no timers on screen: nothing shows until something is ready.
+A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute cooldown is ready. That's it. 
 
 ## Features
 
