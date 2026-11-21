@@ -30,3 +30,5 @@ Each release:
 
 1. Move the "Unreleased" notes in `CHANGELOG.md` under the new version.
 2. `git tag v0.1.0 && git push origin v0.1.0`
+
+# i'm helping
