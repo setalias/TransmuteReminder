@@ -23,12 +23,12 @@ Pushing a version tag runs the tests, then builds the addon with the BigWigs pac
 
 One-time setup:
 
-1. Create the CurseForge project and add `## X-Curse-Project-ID: <id>` to `TransmuteReminder.toc`.
+1. The CurseForge project ID (1822226) is set in `TransmuteReminder.toc` as `## X-Curse-Project-ID`.
 2. Add a `CF_API_KEY` secret under the repo's Settings > Secrets and variables > Actions.
 
 Each release:
 
-1. Move the "Unreleased" notes in `CHANGELOG.md` under the new version.
-2. `git tag v0.1.0 && git push origin v0.1.0`
+1. Add a section for the new version at the top of `CHANGELOG.md`.
+2. Tag and push, for example `git tag v0.1.1 && git push origin v0.1.1`.
 
 # i'm helping

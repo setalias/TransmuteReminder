@@ -4,6 +4,7 @@
 ## Author: setalias
 ## Version: @project-version@
 ## Category: Professions
+## X-Curse-Project-ID: 1822226
 ## IconTexture: Interface\Icons\Trade_Alchemy
 ## SavedVariables: TransmuteReminderAccountDB
 ## AddonCompartmentFunc: TransmuteReminder_OnAddonCompartmentClick
