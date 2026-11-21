@@ -4,7 +4,7 @@
 
 - Recipes that share a cooldown are tracked as one group, and separate timers are tracked separately. The Arcanite group, Iron to Gold and Mithril to Truesilver each get their own reminder.
 - Casting any tracked recipe re-reads every group, so casting one transmute no longer overwrites another.
-- When the game gives no cooldown, the last length seen is used before the fallback setting (now 36 hours).
+- When the game gives no cooldown, the last length seen is used before the manual cooldown setting (now 36 hours).
 - Someone else's profession (link or guild crafter) is never scanned.
 - Transmutes are recognized by recipe ID as well as name, so detection works on non-English clients.
 - Cooldowns save account-wide. Alts with a ready cooldown can trigger the reminder, and dismissing one alt cooldown no longer hides later ones.

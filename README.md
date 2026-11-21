@@ -6,7 +6,7 @@ A WoW: Forever addon that shows a "Check transmutes" reminder when your alchemy 
 
 - When you open your Alchemy window, the addon reads every recipe's cooldown. Recipes that share a cooldown become one entry. On Forever that means the Arcanite group (Arcanite, the elemental transmutes, Refined Scale of Onyxia and others) is one timer, while Iron to Gold and Mithril to Truesilver each have their own.
 - When you cast a transmute or another tracked recipe, it re-reads them all, so every group stays correct.
-- If the game gives no readable cooldown, it uses the length it saw last time, then a last-resort setting (default 36 hours, `/tmr hours <n>`).
+- If the game gives no readable cooldown, it uses the length it saw last time, then the manual cooldown setting (default 36 hours, `/tmr hours <n>`).
 - Viewing someone else's profession (a link or a guild crafter) is never scanned.
 - When a cooldown ends, a small frame appears with which ones are ready. Left-click opens the recipe and dismisses it, right-click snoozes it, middle-click dismisses it. Drag it to move it.
 - Cooldowns are saved account-wide, so the reminder also tells you which alts have something ready.
@@ -39,7 +39,7 @@ Options > AddOns > TransmuteReminder holds every setting above plus the command 
 - `/tmr lock` and `/tmr unlock` lock or unlock dragging
 - `/tmr minimap` shows or hides the minimap button
 - `/tmr alts` lists cooldowns on your other characters, `/tmr forget <name>` removes one
-- `/tmr hours <n>` sets the last-resort cooldown length
+- `/tmr hours <n>` sets the manual cooldown in hours
 - `/tmr scale <n>` sets the size from 0.5 to 3, `/tmr scale default` resets it
 - `/tmr message <text>` sets the reminder text, `/tmr message default` restores it
 - `/tmr debug` prints diagnostic info, `/tmr debug on` prints the spell ID of every cast

@@ -43,7 +43,7 @@ ns.DEFAULTS = {
     minimapAngle = 215,
     remindAlts = true,
     clickOpens = true,
-    hours = 36,                -- last-resort cooldown if the game gives none and none was seen before
+    hours = 36,                -- manual cooldown, used when the game reports none and none was seen before
     debug = false,
 }
 
@@ -1039,7 +1039,7 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         local hours = tonumber(arg)
         if hours and hours > 0 then
             s.hours = hours
-            print_msg(string.format("last-resort cooldown set to %s hours.", hours))
+            print_msg(string.format("manual cooldown set to %s hours.", hours))
         else
             print_msg("usage: /tmr hours <number>")
         end

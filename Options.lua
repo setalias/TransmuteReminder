@@ -460,8 +460,8 @@ function ns.Options_Create()
         function() return not s.minimapHide end,
         function(v) s.minimapHide = not v; ns.Minimap_Update() end)
 
-    header("Advanced")
-    edit_row("Last-resort cooldown in hours (used only if the game gives no cooldown and none was seen before)",
+    header("Manual cooldown")
+    edit_row("Hours to use when the game doesn't report a cooldown",
         function() return tostring(s.hours) end,
         function(text)
             local n = tonumber(text)
@@ -482,7 +482,7 @@ function ns.Options_Create()
         .. "/tmr minimap    Show or hide the minimap button\n"
         .. "/tmr message <text>    Set the reminder text, or /tmr message default\n"
         .. "/tmr scale <n>    Set the size from " .. ns.MIN_SCALE .. " to " .. ns.MAX_SCALE .. ", or /tmr scale default\n"
-        .. "/tmr hours <n>    Set the last-resort cooldown length in hours\n"
+        .. "/tmr hours <n>    Set the manual cooldown in hours\n"
         .. "/tmr alts    List cooldowns recorded on other characters\n"
         .. "/tmr forget <name>    Remove a character you no longer play\n"
         .. "/tmr debug [on|off]    Print diagnostic info, or every cast's spell ID")
