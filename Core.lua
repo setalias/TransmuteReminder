@@ -539,7 +539,7 @@ function ns.scan(manual)
             else
                 local suffix = ""
                 if r.remaining then
-                    suffix = " - " .. ns.format_duration(r.remaining) .. " left"
+                    suffix = " - " .. ns.format_duration(r.remaining)
                 elseif is_transmute_name(r.name) then
                     suffix = " - ready"
                 end
