@@ -337,34 +337,35 @@ local function time_label(expiry)
     return date("%a %I:%M %p", expiry)
 end
 
+-- One line per cooldown: "Arcanite: ready in 1d 9h" for this character,
+-- "Arcanite (Rated): ready in 1d 9h" for alts.
+local function status_line(it, now, withTime)
+    local label = ns.short_label(it)
+    if it.char then label = label .. " (" .. it.char .. ")" end
+    if it.ready then return label .. ": ready" end
+    local line = label .. ": ready in " .. ns.format_duration(it.expiry - now)
+    if withTime then line = line .. " (" .. time_label(it.expiry) .. ")" end
+    return line
+end
+ns.status_line = status_line
+
 function ns.StatusLines()
     local lines = {}
     local now = GetServerTime()
     local own = ns.own_items()
-    if #own == 0 then
-        lines[1] = "No cooldown recorded yet. One is recorded when you cast a transmute or open your Alchemy window."
-    else
-        for _, it in ipairs(own) do
-            if it.ready then
-                lines[#lines + 1] = it.name .. ": ready"
-            else
-                lines[#lines + 1] = string.format("%s: ready in %s (%s)",
-                    it.name, ns.format_duration(it.expiry - now), time_label(it.expiry))
-            end
-        end
-    end
     local alts = ns.alt_items()
+    if #own == 0 and #alts == 0 then
+        return { "No cooldowns recorded yet. Open your Alchemy window on an alchemist to start tracking." }
+    end
+    for _, it in ipairs(own) do
+        lines[#lines + 1] = status_line(it, now, true)
+    end
     for i, it in ipairs(alts) do
         if i > 8 then
             lines[#lines + 1] = string.format("...and %d more on other characters.", #alts - 8)
             break
         end
-        if it.ready then
-            lines[#lines + 1] = string.format("%s, %s: ready", it.char, it.name)
-        else
-            lines[#lines + 1] = string.format("%s, %s: ready in %s",
-                it.char, it.name, ns.format_duration(it.expiry - now))
-        end
+        lines[#lines + 1] = status_line(it, now, false)
     end
     return lines
 end
@@ -695,7 +696,11 @@ function ns.scan(manual)
 
     if manual then
         if #results == 0 then
-            print_msg("no transmute recipes or cooldowns found. Open your Alchemy window first.")
+            if #ns.alt_items() > 0 then
+                print_msg("no profession cooldowns found on this character. /tmr alts lists your other characters.")
+            else
+                print_msg("no profession cooldowns found. Open your Alchemy window on an alchemist first.")
+            end
             return
         end
         print_msg(string.format("scan found %d recipes:", #results))
@@ -820,21 +825,36 @@ end
 -- One line: what is ready now, or the next cooldown to finish.
 function ns.WhatsNext()
     local now = GetServerTime()
-    local ready, nextItem = {}, nil
-    for _, it in ipairs(ns.own_items()) do
-        if it.ready then
-            ready[#ready + 1] = ns.short_label(it)
-        elseif not nextItem or it.expiry < nextItem.expiry then
-            nextItem = it
+    local function pick(items)
+        local ready, nextItem = {}, nil
+        for _, it in ipairs(items) do
+            if it.ready then
+                ready[#ready + 1] = it
+            elseif not nextItem or it.expiry < nextItem.expiry then
+                nextItem = it
+            end
         end
+        return ready, nextItem
     end
+    local function label(it)
+        local l = ns.short_label(it)
+        if it.char then l = l .. " (" .. it.char .. ")" end
+        return l
+    end
+
+    -- This character first; if it has nothing, look at the alts.
+    local items = ns.own_items()
+    if #items == 0 then items = ns.alt_items() end
+    local ready, nextItem = pick(items)
     if #ready > 0 then
-        print_msg("ready now: " .. table.concat(ready, ", ") .. ".")
+        local names = {}
+        for _, it in ipairs(ready) do names[#names + 1] = label(it) end
+        print_msg("ready now: " .. table.concat(names, ", ") .. ".")
     elseif nextItem then
-        print_msg(string.format("next: %s in %s (%s).", ns.short_label(nextItem),
+        print_msg(string.format("next: %s in %s (%s).", label(nextItem),
             ns.format_duration(nextItem.expiry - now), time_label(nextItem.expiry)))
     else
-        print_msg("nothing recorded yet. Open your Alchemy window first.")
+        print_msg("nothing recorded yet. Open your Alchemy window on an alchemist first.")
     end
 end
 
@@ -1064,8 +1084,7 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             local now = GetServerTime()
             for _, it in ipairs(alts) do
-                print_msg(string.format("  %s, %s: %s", it.char, ns.short_label(it),
-                    it.ready and "ready" or ("ready in " .. ns.format_duration(it.expiry - now))))
+                print_msg("  " .. status_line(it, now, false))
             end
         end
     elseif cmd == "forget" then

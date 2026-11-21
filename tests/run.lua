@@ -221,7 +221,17 @@ check(not popup().__shown, "alt reminder dismissed")
 M.advance(600); M.runTimers()
 check(popup().__shown and ns.ready_alts()[1].key == "g:222", "a later alt cooldown still reminds")
 slash("alts")
-check(printed("Ayla, Iron to Gold: ready"), "/tmr alts output")
+check(printed("Iron to Gold (Ayla): ready"), "/tmr alts output")
+-- a character with no professions: status lists alts, no "nothing recorded" line
+local status = table.concat(ns.StatusLines(), "\n")
+check(not status:find("No cooldowns recorded", 1, true) and status:find("(Ayla)", 1, true), "status on a character without cooldowns shows alts")
+M.printed = {}
+M.recipes = {}
+slash("scan")
+check(printed("no profession cooldowns found on this character"), "scan on a non-alchemist")
+M.printed = {}
+slash("whatsnext")
+check(printed("(Ayla)"), "whatsnext falls back to alts")
 slash("forget Ayla")
 check(#ns.alt_items() == 0, "forgot Ayla")
 

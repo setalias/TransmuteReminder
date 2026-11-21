@@ -274,7 +274,7 @@ function ns.Options_Create()
     header("Cooldowns to remind about")
     local rows = {}
     local none = content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
-    none:SetText("Nothing recorded yet. Open your Alchemy window or cast a transmute.")
+    none:SetText("Nothing recorded yet. Open your Alchemy window on an alchemist.")
     local checklist = add({})
     checklist.refresh = function()
         local keys = ns.all_keys()
