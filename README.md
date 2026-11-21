@@ -6,6 +6,7 @@ A WoW: Forever addon that shows a "Check transmutes" reminder when your alchemy 
 
 - When you cast a transmute, the addon reads the cooldown from the game and stores the time it ends.
 - If the game gives no readable cooldown, it falls back to a set number of hours (default 20, change with `/tmr hours <n>`).
+- When you open your Alchemy window, it scans the transmute recipes and picks up cooldowns that started before the addon was installed. `/tmr scan` runs the scan by hand and prints what the game reports for each transmute.
 - When that time passes, a small frame appears. Click it to dismiss it. Drag it to move it.
 - Cooldowns are only read outside combat, because Forever applies Midnight-style addon restrictions in combat.
 
@@ -13,6 +14,7 @@ A WoW: Forever addon that shows a "Check transmutes" reminder when your alchemy 
 
 - `/tmr` shows the current status
 - `/tmr test` shows the frame
+- `/tmr scan` scans the open Alchemy window and prints each transmute's cooldown
 - `/tmr reset` resets the frame position
 - `/tmr clear` clears the stored cooldown
 - `/tmr hours <n>` sets the fallback cooldown length

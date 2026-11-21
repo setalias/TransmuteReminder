@@ -174,6 +174,113 @@ local function on_transmute_cast(spellID)
 end
 
 ---------------------------------------------------------------------------
+-- Profession window scan
+-- Picks up cooldowns that started before the addon was installed. Needs the
+-- profession window open, because the recipe list is only loaded then.
+---------------------------------------------------------------------------
+
+local AUTO_SCAN_THROTTLE = 10 -- seconds between automatic scans
+local last_scan = 0
+local scan_queued = false
+
+local function recipe_cooldown_seconds(recipeID)
+    if not (C_TradeSkillUI and C_TradeSkillUI.GetRecipeCooldown) then return nil end
+    local ok, cd = pcall(C_TradeSkillUI.GetRecipeCooldown, recipeID)
+    if not ok or type(cd) ~= "number" or is_secret(cd) then return nil end
+    return cd
+end
+
+-- Returns a list of { name, id, viaRecipe, viaSpell } for every transmute recipe
+-- in the open profession. Values are remaining seconds, or nil if unreadable.
+local function collect_transmutes()
+    local results = {}
+
+    if C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs and C_TradeSkillUI.GetRecipeInfo then
+        local ok, ids = pcall(C_TradeSkillUI.GetAllRecipeIDs)
+        if ok and type(ids) == "table" then
+            for _, id in ipairs(ids) do
+                local okInfo, info = pcall(C_TradeSkillUI.GetRecipeInfo, id)
+                if okInfo and type(info) == "table" and not is_secret(info.name) and is_transmute_name(info.name) then
+                    local viaSpell
+                    local expiry = read_expiry(id)
+                    if expiry then viaSpell = expiry - GetServerTime() end
+                    results[#results + 1] = {
+                        name = info.name,
+                        id = id,
+                        viaRecipe = recipe_cooldown_seconds(id),
+                        viaSpell = viaSpell,
+                    }
+                end
+            end
+        end
+    elseif GetNumTradeSkills and GetTradeSkillInfo then
+        -- Classic-style API
+        for i = 1, GetNumTradeSkills() do
+            local name, kind = GetTradeSkillInfo(i)
+            if kind ~= "header" and is_transmute_name(name) then
+                local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i) or nil
+                results[#results + 1] = { name = name, id = i, viaRecipe = cd }
+            end
+        end
+    end
+
+    return results
+end
+
+local function scan_recipes(manual)
+    if not db then return end
+    if InCombatLockdown() then
+        if manual then print_msg("can't scan in combat.") end
+        return
+    end
+    if not manual and (GetTime() - last_scan) < AUTO_SCAN_THROTTLE then return end
+    last_scan = GetTime()
+
+    local results = collect_transmutes()
+
+    if manual then
+        if #results == 0 then
+            print_msg("no transmute recipes found. Open your Alchemy window first.")
+            return
+        end
+        print_msg(string.format("scan found %d transmute recipes:", #results))
+        for _, r in ipairs(results) do
+            print_msg(string.format("  %s (%s): recipe cooldown=%s, spell cooldown=%s",
+                r.name, tostring(r.id), tostring(r.viaRecipe), tostring(r.viaSpell)))
+        end
+    end
+
+    -- Shortest remaining cooldown among transmutes that are on cooldown.
+    local best
+    for _, r in ipairs(results) do
+        local remaining = r.viaRecipe
+        if not remaining or remaining <= 0 then remaining = r.viaSpell end
+        if remaining and remaining > 0 and (not best or remaining < best) then
+            best = remaining
+        end
+    end
+
+    if best then
+        local expiry = GetServerTime() + best
+        -- Skip tiny differences so reopening the window doesn't repeat the message.
+        if manual or not db.expiry or math.abs(db.expiry - expiry) > 90 then
+            set_expiry(expiry, "scanned from profession window")
+        end
+    elseif manual then
+        print_msg("no transmute is on cooldown, or the game gave no readable cooldown.")
+    end
+end
+
+local function queue_scan()
+    if scan_queued then return end
+    scan_queued = true
+    C_Timer.After(1, function()
+        scan_queued = false
+        scan_recipes(false)
+    end)
+end
+
+---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
 
@@ -189,6 +296,8 @@ events:SetScript("OnEvent", function(self, event, ...)
         self:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         self:RegisterEvent("PLAYER_REGEN_ENABLED")
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
+        self:RegisterEvent("TRADE_SKILL_SHOW")
+        self:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 
         C_Timer.NewTicker(CHECK_INTERVAL, check_ready)
         check_ready()
@@ -204,6 +313,9 @@ events:SetScript("OnEvent", function(self, event, ...)
             -- Give the game a moment to apply the cooldown before reading it.
             C_Timer.After(1.5, function() on_transmute_cast(spellID) end)
         end
+
+    elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" then
+        queue_scan()
 
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" then
         -- Refresh from the game when it is safe, so the stored time stays accurate.
@@ -228,6 +340,8 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
     if cmd == "test" then
         db.dismissed = false
         frame:Show()
+    elseif cmd == "scan" then
+        scan_recipes(true)
     elseif cmd == "reset" then
         db.point = nil
         frame:ClearAllPoints()
@@ -266,6 +380,7 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
                     tostring(start), tostring(duration),
                     tostring(is_secret(start) or is_secret(duration))))
             end
+            print_msg("  tip: open your Alchemy window and run /tmr scan to see what the game reports.")
             print_msg("  tip: /tmr debug on, then cast a transmute to see its spell ID.")
         end
     else
@@ -279,6 +394,6 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             print_msg("no transmute cooldown recorded yet. It is recorded when you cast one.")
         end
-        print_msg("commands: /tmr test, reset, clear, hours <n>, debug [on|off]")
+        print_msg("commands: /tmr test, scan, reset, clear, hours <n>, debug [on|off]")
     end
 end
