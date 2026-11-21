@@ -8,6 +8,8 @@ local ADDON_NAME = ...
 local FALLBACK_HOURS = 20      -- used only if the game gives no readable cooldown
 local MIN_REAL_COOLDOWN = 120  -- seconds; anything shorter is treated as a global cooldown
 local CHECK_INTERVAL = 30      -- seconds between ready checks
+local DEFAULT_MESSAGE = "Check transmutes"
+local MAX_MESSAGE_LENGTH = 40  -- characters; the reminder is a single line
 
 local db
 local frame
@@ -68,6 +70,28 @@ local function save_position()
     db.point = { point, relPoint, x, y }
 end
 
+local function text_length(s)
+    return (strlenutf8 and strlenutf8(s)) or #s
+end
+
+-- Pipes start escape codes in WoW text, so show them literally.
+local function escape_pipes(s)
+    return (s:gsub("|", "||"))
+end
+
+local function get_message()
+    if db and type(db.message) == "string" and db.message ~= "" then
+        return db.message
+    end
+    return DEFAULT_MESSAGE
+end
+
+local function apply_message()
+    if not frame then return end
+    frame.text:SetText(escape_pipes(get_message()))
+    frame:SetWidth(math.max(120, frame.text:GetStringWidth() + 32))
+end
+
 local function create_frame()
     frame = CreateFrame("Button", "TransmuteReminderFrame", UIParent, "BackdropTemplate")
     frame:SetSize(190, 40)
@@ -90,8 +114,8 @@ local function create_frame()
 
     local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     text:SetPoint("CENTER")
-    text:SetText("Check transmutes")
     frame.text = text
+    apply_message()
 
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
@@ -374,8 +398,49 @@ local function create_options()
         self:ClearFocus()
     end)
 
+    local msg_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    msg_title:SetPoint("TOPLEFT", hours_label, "BOTTOMLEFT", 0, -24)
+    msg_title:SetText("Reminder text")
+
+    local msg_hint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    msg_hint:SetPoint("TOPLEFT", msg_title, "BOTTOMLEFT", 0, -8)
+    msg_hint:SetWidth(560)
+    msg_hint:SetJustifyH("LEFT")
+    msg_hint:SetText("The words shown when your transmute is ready. Up to " .. MAX_MESSAGE_LENGTH
+        .. " characters. Press Enter to save.")
+
+    local msg_box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    msg_box:SetSize(320, 20)
+    msg_box:SetPoint("TOPLEFT", msg_hint, "BOTTOMLEFT", 6, -10)
+    msg_box:SetAutoFocus(false)
+    msg_box:SetMaxLetters(MAX_MESSAGE_LENGTH)
+    msg_box:SetScript("OnEnterPressed", function(self)
+        local t = (self:GetText() or ""):match("^%s*(.-)%s*$")
+        if t == "" then
+            SlashCmdList["TRANSMUTEREMINDER"]("message default")
+        else
+            SlashCmdList["TRANSMUTEREMINDER"]("message " .. t)
+        end
+        self:SetText(get_message())
+        self:ClearFocus()
+    end)
+    msg_box:SetScript("OnEscapePressed", function(self)
+        self:SetText(get_message())
+        self:ClearFocus()
+    end)
+
+    local msg_reset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    msg_reset:SetSize(130, 24)
+    msg_reset:SetPoint("LEFT", msg_box, "RIGHT", 12, 0)
+    msg_reset:SetText("Reset to default")
+    msg_reset:SetScript("OnClick", function()
+        SlashCmdList["TRANSMUTEREMINDER"]("message default")
+        msg_box:SetText(get_message())
+        msg_box:ClearFocus()
+    end)
+
     local cmds_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    cmds_title:SetPoint("TOPLEFT", hours_label, "BOTTOMLEFT", 0, -24)
+    cmds_title:SetPoint("TOPLEFT", msg_title, "BOTTOMLEFT", 0, -90)
     cmds_title:SetText("Commands")
 
     local cmds = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -390,11 +455,13 @@ local function create_options()
         .. "/tmr reset    Reset the reminder position\n"
         .. "/tmr clear    Clear the stored cooldown\n"
         .. "/tmr hours <n>    Set the fallback cooldown length in hours\n"
+        .. "/tmr message <text>    Set the reminder text (up to " .. MAX_MESSAGE_LENGTH .. " characters), or /tmr message default\n"
         .. "/tmr debug [on|off]    Print diagnostic info, or every cast's spell ID")
 
     panel.refresh = function()
         status:SetText(status_line())
         hours_box:SetText(tostring(db.hours or FALLBACK_HOURS))
+        msg_box:SetText(get_message())
     end
     panel:SetScript("OnShow", panel.refresh)
 
@@ -488,6 +555,25 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         db.dismissed = false
         frame:Hide()
         print_msg("stored cooldown cleared.")
+    elseif cmd == "message" then
+        arg = arg:match("^%s*(.-)%s*$")
+        if arg == "" then
+            print_msg(string.format("reminder text is \"%s\". Use /tmr message <text> to change it, or /tmr message default to reset.",
+                escape_pipes(get_message())))
+        elseif arg:lower() == "default" then
+            db.message = nil
+            apply_message()
+            print_msg(string.format("reminder text reset to \"%s\".", DEFAULT_MESSAGE))
+        else
+            local len = text_length(arg)
+            if len > MAX_MESSAGE_LENGTH then
+                print_msg(string.format("that is %d characters. The limit is %d.", len, MAX_MESSAGE_LENGTH))
+            else
+                db.message = arg
+                apply_message()
+                print_msg(string.format("reminder text set to \"%s\".", escape_pipes(arg)))
+            end
+        end
     elseif cmd == "hours" then
         local hours = tonumber(arg)
         if hours and hours > 0 then
@@ -530,6 +616,6 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             print_msg("no transmute cooldown recorded yet. It is recorded when you cast one.")
         end
-        print_msg("commands: /tmr options, test, scan, reset, clear, hours <n>, debug [on|off]")
+        print_msg("commands: /tmr options, test, scan, reset, clear, hours <n>, message <text>, debug [on|off]")
     end
 end

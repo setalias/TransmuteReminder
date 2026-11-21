@@ -7,4 +7,5 @@
 - Reads the cooldown from the game after you cast a transmute, with a configurable fallback.
 - Scans the Alchemy window to pick up cooldowns started before install.
 - Options panel under Options > AddOns with status, actions, and command help.
-- Commands: `/tmr`, `/tmr options`, `/tmr test`, `/tmr scan`, `/tmr reset`, `/tmr clear`, `/tmr hours <n>`, `/tmr debug`.
+- Customizable reminder text, up to 40 characters, set in the options panel or with `/tmr message`.
+- Commands: `/tmr`, `/tmr options`, `/tmr test`, `/tmr scan`, `/tmr reset`, `/tmr clear`, `/tmr hours <n>`, `/tmr message <text>`, `/tmr debug`.
