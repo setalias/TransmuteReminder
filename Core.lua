@@ -537,7 +537,13 @@ function ns.scan(manual)
                 print_msg(string.format("  %s (%s): recipe cooldown=%s, spell cooldown=%s",
                     r.name, tostring(r.id), tostring(r.viaRecipe), tostring(r.viaSpell)))
             else
-                print_msg("  " .. r.name)
+                local suffix = ""
+                if r.remaining then
+                    suffix = " - " .. ns.format_duration(r.remaining) .. " left"
+                elseif is_transmute_name(r.name) then
+                    suffix = " - ready"
+                end
+                print_msg("  " .. r.name .. suffix)
             end
         end
     end
