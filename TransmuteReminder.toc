@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: TransmuteReminder
+## Notes: Shows a "Check transmutes" reminder when your alchemy transmute cooldown is ready. No countdown bars.
+## Author: setalias
+## Version: @project-version@
+## Category: Professions
+## SavedVariablesPerCharacter: TransmuteReminderDB
+
+TransmuteReminder.lua
