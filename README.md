@@ -1,6 +1,6 @@
 # TransmuteReminder
 
-A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute cooldown is ready. That's it. 
+A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute cooldown is ready. That's it.
 
 ## Features
 
@@ -20,7 +20,7 @@ A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute
 
 1. Install the addon and log in.
 2. Open your Alchemy window once on each alchemist. This records the current cooldowns.
-3. That's it. The reminder appears when a cooldown ends.
+3. Play as normal. The reminder appears when a cooldown ends.
 
 Settings are in Options > AddOns > TransmuteReminder, or type `/tmr options`.
 
@@ -44,41 +44,22 @@ Settings are in Options > AddOns > TransmuteReminder, or type `/tmr options`.
 | `/tmr hours <n>` | Set the manual cooldown, used when the game reports none |
 | `/tmr debug [on\|off]` | Diagnostic info; `on` also prints recipe IDs and raw values |
 
-## How it works
+## FAQ
 
-- Opening a profession window reads every learned recipe's cooldown. Recipes whose cooldowns match are grouped into one entry.
-- Casting a tracked recipe re-reads all of them, so casting one transmute never overwrites another.
-- If the game gives no readable cooldown, the addon uses the length it saw last time, then the manual cooldown setting (default 36 hours).
-- Someone else's profession (a link or a guild crafter) is never scanned.
+**Do I need the addon installed when I cast the transmute?**
+No. Open your Alchemy window and it picks up any cooldown already running.
 
-## Development
+**Why does Arcanite show as one reminder when I know several transmutes?**
+On Forever many transmutes share one cooldown. The addon groups them so you get one reminder per timer, not one per recipe.
 
-```
-TransmuteReminder.toc   addon metadata and load order
-Core.lua                cooldown tracking, grouping, events, slash commands
-Popup.lua               reminder window, tooltip, minimap button
-Options.lua             settings panel
-tests/                  WoW API mock and test suite
-```
+**Will viewing a guildmate's profession mess up my timers?**
+No. Other players' professions are never read.
 
-- **Run the tests:** `lua5.1 tests/run.lua` from the repo root. It loads the addon against a mock of the WoW API.
-- **Lint:** `luacheck Core.lua Popup.lua Options.lua` (config in `.luacheckrc`).
-- **CI:** GitHub Actions runs both on every push and pull request.
-- **Local testing in game:** copy the TOC and the three `.lua` files into `World of Warcraft\_forever_\Interface\AddOns\TransmuteReminder\`, then `/reload`.
+**What is the manual cooldown setting?**
+A backup for the rare case the game doesn't report a cooldown. You shouldn't need to change it.
 
-## Releasing
-
-Pushing a version tag runs the tests, then builds the addon with the BigWigs packager and uploads it to CurseForge. `@project-version@` in the TOC is replaced with the tag.
-
-One-time setup:
-
-1. Create the CurseForge project and add `## X-Curse-Project-ID: <id>` to `TransmuteReminder.toc`.
-2. Add a `CF_API_KEY` secret under the repo's Settings > Secrets and variables > Actions.
-
-Each release:
-
-1. Move the "Unreleased" notes in `CHANGELOG.md` under the new version.
-2. `git tag v0.1.0 && git push origin v0.1.0`
+**Found a bug or have an idea?**
+Open an issue on [GitHub](https://github.com/setalias/TransmuteReminder/issues).
 
 ## License
 
