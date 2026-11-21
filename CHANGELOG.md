@@ -12,6 +12,7 @@
 - Minimap button, AddOn Compartment entry, lock option, 10 second preview.
 - New commands: `/tmr lock`, `/tmr unlock`, `/tmr minimap`, `/tmr alts`, `/tmr forget`.
 - Settings from 0.1.0 are migrated automatically.
+- `/tmr scan` lists just the recipe names. Turn on `/tmr debug on` to see recipe IDs and cooldown values.
 
 ## 0.1.0
 

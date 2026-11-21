@@ -533,8 +533,12 @@ function ns.scan(manual)
         end
         print_msg(string.format("scan found %d recipes:", #results))
         for _, r in ipairs(results) do
-            print_msg(string.format("  %s (%s): recipe cooldown=%s, spell cooldown=%s",
-                r.name, tostring(r.id), tostring(r.viaRecipe), tostring(r.viaSpell)))
+            if s.debug then
+                print_msg(string.format("  %s (%s): recipe cooldown=%s, spell cooldown=%s",
+                    r.name, tostring(r.id), tostring(r.viaRecipe), tostring(r.viaSpell)))
+            else
+                print_msg("  " .. r.name)
+            end
         end
     end
 
