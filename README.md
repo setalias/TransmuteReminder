@@ -12,7 +12,7 @@ A WoW: Forever addon that shows a "Check transmutes" reminder when your alchemy 
 
 ## Options
 
-Options > AddOns > TransmuteReminder shows the commands, a status line, buttons for the common actions, the fallback cooldown setting, and the reminder text. `/tmr options` opens it.
+Options > AddOns > TransmuteReminder shows the commands, a status line, buttons for the common actions, the fallback cooldown setting, the reminder text, and the reminder size. `/tmr options` opens it.
 
 ## Commands
 
@@ -23,6 +23,7 @@ Options > AddOns > TransmuteReminder shows the commands, a status line, buttons 
 - `/tmr reset` resets the frame position
 - `/tmr clear` clears the stored cooldown
 - `/tmr hours <n>` sets the fallback cooldown length
+- `/tmr scale <n>` sets the reminder size from 0.5 to 3 (1 is normal), `/tmr scale default` resets it
 - `/tmr message <text>` sets the reminder text (up to 40 characters), `/tmr message default` restores "Check transmutes"
 - `/tmr debug` prints diagnostic info, `/tmr debug on` prints the spell ID of every cast
 

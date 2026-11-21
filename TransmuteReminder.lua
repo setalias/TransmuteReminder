@@ -10,6 +10,8 @@ local MIN_REAL_COOLDOWN = 120  -- seconds; anything shorter is treated as a glob
 local CHECK_INTERVAL = 30      -- seconds between ready checks
 local DEFAULT_MESSAGE = "Check transmutes"
 local MAX_MESSAGE_LENGTH = 40  -- characters; the reminder is a single line
+local MIN_SCALE = 0.5
+local MAX_SCALE = 3
 
 local db
 local frame
@@ -92,6 +94,26 @@ local function apply_message()
     frame:SetWidth(math.max(120, frame.text:GetStringWidth() + 32))
 end
 
+local function get_scale()
+    local s = db and tonumber(db.scale) or 1
+    return math.min(MAX_SCALE, math.max(MIN_SCALE, s))
+end
+
+-- Changes the size of the reminder while keeping it centered where it was.
+local function apply_scale()
+    if not frame then return end
+    local scale = get_scale()
+    local cx, cy = frame:GetCenter()
+    local old = frame:GetEffectiveScale()
+    frame:SetScale(scale)
+    if cx and cy then
+        local new = frame:GetEffectiveScale()
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx * old / new, cy * old / new)
+        save_position()
+    end
+end
+
 local function create_frame()
     frame = CreateFrame("Button", "TransmuteReminderFrame", UIParent, "BackdropTemplate")
     frame:SetSize(190, 40)
@@ -103,6 +125,8 @@ local function create_frame()
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
     frame:SetBackdropColor(0, 0, 0, 0.85)
+
+    frame:SetScale(get_scale())
 
     local p = db.point
     frame:ClearAllPoints()
@@ -321,6 +345,8 @@ local function status_line()
     return "Your transmute is ready."
 end
 
+local panel_refresh
+
 local function make_button(parent, label, width, anchor, x, y, command)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     b:SetSize(width, 24)
@@ -328,7 +354,7 @@ local function make_button(parent, label, width, anchor, x, y, command)
     b:SetText(label)
     b:SetScript("OnClick", function()
         SlashCmdList["TRANSMUTEREMINDER"](command)
-        if parent.refresh then parent.refresh() end
+        if panel_refresh then panel_refresh() end
     end)
     return b
 end
@@ -341,27 +367,35 @@ local function create_options()
     local panel = CreateFrame("Frame")
     panel.name = "TransmuteReminder"
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    -- The content is taller than the settings window, so it sits in a scroll frame.
+    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 4, -4)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 4)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(600, 840)
+    scroll:SetScrollChild(content)
+
+    local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("TransmuteReminder")
 
-    local desc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local desc = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
     desc:SetText("Shows a \"Check transmutes\" reminder when your alchemy transmute cooldown is ready. "
         .. "No countdown bars. Click the reminder to dismiss it, drag it to move it.")
 
-    local status = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    local status = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     status:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -16)
     status:SetWidth(560)
     status:SetJustifyH("LEFT")
 
-    local how_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local how_title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     how_title:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -20)
     how_title:SetText("How it works")
 
-    local how = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local how = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     how:SetPoint("TOPLEFT", how_title, "BOTTOMLEFT", 0, -8)
     how:SetWidth(560)
     how:SetJustifyH("LEFT")
@@ -370,20 +404,20 @@ local function create_options()
         .. "If the game gives no readable cooldown, it falls back to the number of hours set below.\n"
         .. "Cooldowns are only read outside combat.")
 
-    local actions_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local actions_title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     actions_title:SetPoint("TOPLEFT", how, "BOTTOMLEFT", 0, -20)
     actions_title:SetText("Actions")
 
-    local b1 = make_button(panel, "Show reminder", 140, actions_title, 0, -8, "test")
-    local b2 = make_button(panel, "Scan Alchemy window", 160, actions_title, 150, -8, "scan")
-    local b3 = make_button(panel, "Reset position", 130, actions_title, 320, -8, "reset")
-    local b4 = make_button(panel, "Clear cooldown", 130, actions_title, 460, -8, "clear")
+    local b1 = make_button(content, "Show reminder", 140, actions_title, 0, -8, "test")
+    local b2 = make_button(content, "Scan Alchemy window", 160, actions_title, 150, -8, "scan")
+    local b3 = make_button(content, "Reset position", 130, actions_title, 320, -8, "reset")
+    local b4 = make_button(content, "Clear cooldown", 130, actions_title, 460, -8, "clear")
 
-    local hours_label = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local hours_label = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     hours_label:SetPoint("TOPLEFT", b1, "BOTTOMLEFT", 0, -20)
     hours_label:SetText("Fallback cooldown (hours):")
 
-    local hours_box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    local hours_box = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
     hours_box:SetSize(50, 20)
     hours_box:SetPoint("LEFT", hours_label, "RIGHT", 12, 0)
     hours_box:SetAutoFocus(false)
@@ -398,18 +432,18 @@ local function create_options()
         self:ClearFocus()
     end)
 
-    local msg_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local msg_title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     msg_title:SetPoint("TOPLEFT", hours_label, "BOTTOMLEFT", 0, -24)
     msg_title:SetText("Reminder text")
 
-    local msg_hint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local msg_hint = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     msg_hint:SetPoint("TOPLEFT", msg_title, "BOTTOMLEFT", 0, -8)
     msg_hint:SetWidth(560)
     msg_hint:SetJustifyH("LEFT")
     msg_hint:SetText("The words shown when your transmute is ready. Up to " .. MAX_MESSAGE_LENGTH
         .. " characters. Press Enter to save.")
 
-    local msg_box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    local msg_box = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
     msg_box:SetSize(320, 20)
     msg_box:SetPoint("TOPLEFT", msg_hint, "BOTTOMLEFT", 6, -10)
     msg_box:SetAutoFocus(false)
@@ -429,7 +463,7 @@ local function create_options()
         self:ClearFocus()
     end)
 
-    local msg_reset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local msg_reset = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     msg_reset:SetSize(130, 24)
     msg_reset:SetPoint("LEFT", msg_box, "RIGHT", 12, 0)
     msg_reset:SetText("Reset to default")
@@ -439,11 +473,67 @@ local function create_options()
         msg_box:ClearFocus()
     end)
 
-    local cmds_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    cmds_title:SetPoint("TOPLEFT", msg_title, "BOTTOMLEFT", 0, -90)
+    local size_title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    size_title:SetPoint("TOPLEFT", msg_title, "BOTTOMLEFT", 0, -90)
+    size_title:SetText("Reminder size")
+
+    local size_hint = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    size_hint:SetPoint("TOPLEFT", size_title, "BOTTOMLEFT", 0, -8)
+    size_hint:SetWidth(560)
+    size_hint:SetJustifyH("LEFT")
+    size_hint:SetText("Drag the slider to make the reminder smaller or larger. It shows the reminder so you can preview it.")
+
+    local size_slider = CreateFrame("Slider", nil, content)
+    size_slider:SetOrientation("HORIZONTAL")
+    size_slider:SetSize(260, 16)
+    size_slider:SetPoint("TOPLEFT", size_hint, "BOTTOMLEFT", 6, -16)
+    size_slider:SetMinMaxValues(MIN_SCALE, MAX_SCALE)
+    size_slider:SetValueStep(0.1)
+    size_slider:SetObeyStepOnDrag(true)
+    local track = size_slider:CreateTexture(nil, "BACKGROUND")
+    track:SetColorTexture(0.25, 0.25, 0.25, 0.9)
+    track:SetHeight(4)
+    track:SetPoint("LEFT")
+    track:SetPoint("RIGHT")
+    size_slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+
+    local size_value = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    size_value:SetPoint("LEFT", size_slider, "RIGHT", 14, 0)
+
+    local size_reset = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    size_reset:SetSize(130, 24)
+    size_reset:SetPoint("LEFT", size_value, "RIGHT", 24, 0)
+    size_reset:SetText("Reset size")
+
+    local updating_slider = false
+    local function show_scale(value)
+        size_value:SetText(string.format("%.1fx", value))
+    end
+    size_slider:SetScript("OnValueChanged", function(self, value, userInput)
+        if updating_slider then return end
+        value = math.floor(value * 10 + 0.5) / 10
+        show_scale(value)
+        if userInput then
+            db.scale = value
+            apply_scale()
+            db.dismissed = false
+            frame:Show()
+        end
+    end)
+    size_reset:SetScript("OnClick", function()
+        db.scale = nil
+        apply_scale()
+        updating_slider = true
+        size_slider:SetValue(1)
+        updating_slider = false
+        show_scale(1)
+    end)
+
+    local cmds_title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    cmds_title:SetPoint("TOPLEFT", size_title, "BOTTOMLEFT", 0, -70)
     cmds_title:SetText("Commands")
 
-    local cmds = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local cmds = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     cmds:SetPoint("TOPLEFT", cmds_title, "BOTTOMLEFT", 0, -8)
     cmds:SetWidth(560)
     cmds:SetJustifyH("LEFT")
@@ -456,13 +546,19 @@ local function create_options()
         .. "/tmr clear    Clear the stored cooldown\n"
         .. "/tmr hours <n>    Set the fallback cooldown length in hours\n"
         .. "/tmr message <text>    Set the reminder text (up to " .. MAX_MESSAGE_LENGTH .. " characters), or /tmr message default\n"
+        .. "/tmr scale <n>    Set the reminder size from " .. MIN_SCALE .. " to " .. MAX_SCALE .. " (1 is normal), or /tmr scale default\n"
         .. "/tmr debug [on|off]    Print diagnostic info, or every cast's spell ID")
 
     panel.refresh = function()
         status:SetText(status_line())
         hours_box:SetText(tostring(db.hours or FALLBACK_HOURS))
         msg_box:SetText(get_message())
+        updating_slider = true
+        size_slider:SetValue(get_scale())
+        updating_slider = false
+        show_scale(get_scale())
     end
+    panel_refresh = panel.refresh
     panel:SetScript("OnShow", panel.refresh)
 
     settings_category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
@@ -574,6 +670,27 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
                 print_msg(string.format("reminder text set to \"%s\".", escape_pipes(arg)))
             end
         end
+    elseif cmd == "scale" then
+        arg = arg:match("^%s*(.-)%s*$")
+        if arg == "" then
+            print_msg(string.format("reminder size is %.1f. Use /tmr scale <%s to %s> to change it, or /tmr scale default to reset.",
+                get_scale(), MIN_SCALE, MAX_SCALE))
+        elseif arg:lower() == "default" then
+            db.scale = nil
+            apply_scale()
+            print_msg("reminder size reset to 1.0.")
+        else
+            local n = tonumber(arg)
+            if n and n >= MIN_SCALE and n <= MAX_SCALE then
+                db.scale = n
+                apply_scale()
+                db.dismissed = false
+                frame:Show()
+                print_msg(string.format("reminder size set to %.1f.", n))
+            else
+                print_msg(string.format("usage: /tmr scale <number from %s to %s>", MIN_SCALE, MAX_SCALE))
+            end
+        end
     elseif cmd == "hours" then
         local hours = tonumber(arg)
         if hours and hours > 0 then
@@ -616,6 +733,6 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             print_msg("no transmute cooldown recorded yet. It is recorded when you cast one.")
         end
-        print_msg("commands: /tmr options, test, scan, reset, clear, hours <n>, message <text>, debug [on|off]")
+        print_msg("commands: /tmr options, test, scan, reset, clear, hours <n>, message <text>, scale <n>, debug [on|off]")
     end
 end

@@ -8,4 +8,5 @@
 - Scans the Alchemy window to pick up cooldowns started before install.
 - Options panel under Options > AddOns with status, actions, and command help.
 - Customizable reminder text, up to 40 characters, set in the options panel or with `/tmr message`.
-- Commands: `/tmr`, `/tmr options`, `/tmr test`, `/tmr scan`, `/tmr reset`, `/tmr clear`, `/tmr hours <n>`, `/tmr message <text>`, `/tmr debug`.
+- Adjustable reminder size (0.5x to 3x) with a slider in the options panel or `/tmr scale`.
+- Commands: `/tmr`, `/tmr options`, `/tmr test`, `/tmr scan`, `/tmr reset`, `/tmr clear`, `/tmr hours <n>`, `/tmr message <text>`, `/tmr scale <n>`, `/tmr debug`.
