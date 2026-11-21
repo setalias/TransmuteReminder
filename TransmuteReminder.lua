@@ -311,7 +311,7 @@ end
 
 local function create_options()
     if not (Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory) then
-        return
+        error("the Settings API is not available on this client")
     end
 
     local panel = CreateFrame("Frame")
