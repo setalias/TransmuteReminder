@@ -444,7 +444,8 @@ local function collect()
         if ok and type(ids) == "table" then
             for _, id in ipairs(ids) do
                 local okInfo, info = pcall(C_TradeSkillUI.GetRecipeInfo, id)
-                if okInfo and type(info) == "table" and type(info.name) == "string" and not is_secret(info.name) then
+                if okInfo and type(info) == "table" and type(info.name) == "string" and not is_secret(info.name)
+                    and info.learned ~= false then
                     local viaRecipe = recipe_cooldown_seconds(id)
                     local viaSpell
                     local expiry = read_expiry(id)
@@ -502,6 +503,20 @@ function ns.scan(manual)
         elseif r.remaining then
             others[#others + 1] = r
         end
+    end
+
+    -- A recipe that reports the same cooldown as the transmutes is sharing it
+    -- (or is not really yours), so it is not tracked separately.
+    if bestRem then
+        local kept = {}
+        for _, r in ipairs(others) do
+            if math.abs(r.remaining - bestRem) <= TOLERANCE then
+                me.cooldowns["r:" .. r.name] = nil
+            else
+                kept[#kept + 1] = r
+            end
+        end
+        others = kept
     end
 
     if manual then
