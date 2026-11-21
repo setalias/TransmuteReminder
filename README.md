@@ -10,9 +10,14 @@ A WoW: Forever addon that shows a "Check transmutes" reminder when your alchemy 
 - When that time passes, a small frame appears. Click it to dismiss it. Drag it to move it.
 - Cooldowns are only read outside combat, because Forever applies Midnight-style addon restrictions in combat.
 
+## Options
+
+Options > AddOns > TransmuteReminder shows the commands, a status line, buttons for the common actions, and the fallback cooldown setting. `/tmr options` opens it.
+
 ## Commands
 
 - `/tmr` shows the current status
+- `/tmr options` opens the options panel
 - `/tmr test` shows the frame
 - `/tmr scan` scans the open Alchemy window and prints each transmute's cooldown
 - `/tmr reset` resets the frame position

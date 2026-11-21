@@ -281,6 +281,136 @@ local function queue_scan()
 end
 
 ---------------------------------------------------------------------------
+-- Options panel (Options > AddOns > TransmuteReminder)
+---------------------------------------------------------------------------
+
+local settings_category
+
+local function status_line()
+    if not db or not db.expiry then
+        return "No transmute cooldown recorded yet. It is recorded when you cast a transmute or open your Alchemy window."
+    end
+    local remaining = db.expiry - GetServerTime()
+    if remaining > 0 then
+        return "Next transmute ready in " .. format_duration(remaining) .. "."
+    end
+    return "Your transmute is ready."
+end
+
+local function make_button(parent, label, width, anchor, x, y, command)
+    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    b:SetSize(width, 24)
+    b:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", x, y)
+    b:SetText(label)
+    b:SetScript("OnClick", function()
+        SlashCmdList["TRANSMUTEREMINDER"](command)
+        if parent.refresh then parent.refresh() end
+    end)
+    return b
+end
+
+local function create_options()
+    if not (Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory) then
+        return
+    end
+
+    local panel = CreateFrame("Frame")
+    panel.name = "TransmuteReminder"
+
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("TransmuteReminder")
+
+    local desc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    desc:SetWidth(560)
+    desc:SetJustifyH("LEFT")
+    desc:SetText("Shows a \"Check transmutes\" reminder when your alchemy transmute cooldown is ready. "
+        .. "No countdown bars. Click the reminder to dismiss it, drag it to move it.")
+
+    local status = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    status:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -16)
+    status:SetWidth(560)
+    status:SetJustifyH("LEFT")
+
+    local how_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    how_title:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -20)
+    how_title:SetText("How it works")
+
+    local how = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    how:SetPoint("TOPLEFT", how_title, "BOTTOMLEFT", 0, -8)
+    how:SetWidth(560)
+    how:SetJustifyH("LEFT")
+    how:SetText("When you cast a transmute, the addon reads the cooldown from the game and stores the time it ends.\n"
+        .. "When you open your Alchemy window, it scans your transmutes and picks up cooldowns that started earlier.\n"
+        .. "If the game gives no readable cooldown, it falls back to the number of hours set below.\n"
+        .. "Cooldowns are only read outside combat.")
+
+    local actions_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    actions_title:SetPoint("TOPLEFT", how, "BOTTOMLEFT", 0, -20)
+    actions_title:SetText("Actions")
+
+    local b1 = make_button(panel, "Show reminder", 140, actions_title, 0, -8, "test")
+    local b2 = make_button(panel, "Scan Alchemy window", 160, actions_title, 150, -8, "scan")
+    local b3 = make_button(panel, "Reset position", 130, actions_title, 320, -8, "reset")
+    local b4 = make_button(panel, "Clear cooldown", 130, actions_title, 460, -8, "clear")
+
+    local hours_label = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    hours_label:SetPoint("TOPLEFT", b1, "BOTTOMLEFT", 0, -20)
+    hours_label:SetText("Fallback cooldown (hours):")
+
+    local hours_box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    hours_box:SetSize(50, 20)
+    hours_box:SetPoint("LEFT", hours_label, "RIGHT", 12, 0)
+    hours_box:SetAutoFocus(false)
+    hours_box:SetNumeric(false)
+    hours_box:SetMaxLetters(5)
+    hours_box:SetScript("OnEnterPressed", function(self)
+        SlashCmdList["TRANSMUTEREMINDER"]("hours " .. (self:GetText() or ""))
+        self:ClearFocus()
+    end)
+    hours_box:SetScript("OnEscapePressed", function(self)
+        self:SetText(tostring(db.hours or FALLBACK_HOURS))
+        self:ClearFocus()
+    end)
+
+    local cmds_title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    cmds_title:SetPoint("TOPLEFT", hours_label, "BOTTOMLEFT", 0, -24)
+    cmds_title:SetText("Commands")
+
+    local cmds = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    cmds:SetPoint("TOPLEFT", cmds_title, "BOTTOMLEFT", 0, -8)
+    cmds:SetWidth(560)
+    cmds:SetJustifyH("LEFT")
+    cmds:SetSpacing(4)
+    cmds:SetText("/tmr    Show the current status\n"
+        .. "/tmr options    Open this panel\n"
+        .. "/tmr test    Show the reminder now\n"
+        .. "/tmr scan    Scan the open Alchemy window and print each transmute's cooldown\n"
+        .. "/tmr reset    Reset the reminder position\n"
+        .. "/tmr clear    Clear the stored cooldown\n"
+        .. "/tmr hours <n>    Set the fallback cooldown length in hours\n"
+        .. "/tmr debug [on|off]    Print diagnostic info, or every cast's spell ID")
+
+    panel.refresh = function()
+        status:SetText(status_line())
+        hours_box:SetText(tostring(db.hours or FALLBACK_HOURS))
+    end
+    panel:SetScript("OnShow", panel.refresh)
+
+    settings_category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+    Settings.RegisterAddOnCategory(settings_category)
+end
+
+local function open_options()
+    if settings_category and Settings.OpenToCategory then
+        local ok = pcall(Settings.OpenToCategory, settings_category:GetID())
+        if ok then return end
+    end
+    print_msg("the options panel is not available. Use /tmr for the command list.")
+end
+
+---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
 
@@ -292,6 +422,10 @@ events:SetScript("OnEvent", function(self, event, ...)
         TransmuteReminderDB = TransmuteReminderDB or {}
         db = TransmuteReminderDB
         create_frame()
+        local ok, err = pcall(create_options)
+        if not ok then
+            print_msg("options panel failed to load: " .. tostring(err))
+        end
 
         self:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -340,6 +474,8 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
     if cmd == "test" then
         db.dismissed = false
         frame:Show()
+    elseif cmd == "options" or cmd == "config" then
+        open_options()
     elseif cmd == "scan" then
         scan_recipes(true)
     elseif cmd == "reset" then
@@ -394,6 +530,6 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         else
             print_msg("no transmute cooldown recorded yet. It is recorded when you cast one.")
         end
-        print_msg("commands: /tmr test, scan, reset, clear, hours <n>, debug [on|off]")
+        print_msg("commands: /tmr options, test, scan, reset, clear, hours <n>, debug [on|off]")
     end
 end
