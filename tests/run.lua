@@ -46,7 +46,7 @@ M.fire(ns, "PLAYER_LOGIN")
 check(not popup().__shown, "hidden at start")
 
 -- Arcanite, Water to Air and Onyxia share 36h; Iron to Gold 1h; Mooncloth 4 days; unlearned ignored.
-scan({ [111] = 130000, [777] = 130010, [666] = 130020, [222] = 3600, [333] = 345600, [888] = 50 })
+scan({ [111] = 130000, [777] = 130001, [666] = 130002, [222] = 3600, [333] = 345600, [888] = 50 })
 local arc, itg, moon = ns.me.cooldowns["g:111"], ns.me.cooldowns["g:222"], ns.me.cooldowns["g:333"]
 check(arc and arc.count == 3 and arc.transmute and arc.name == "Transmute: Arcanite", "Arcanite group has 3 recipes")
 check(ns.me.recipes[666].group == "g:111", "Onyxia scale joins the Arcanite group")
@@ -129,6 +129,11 @@ M.spellCooldowns[444] = { GetTime(), 1800 }
 M.fire(ns, "UNIT_SPELLCAST_SUCCEEDED", "player", "guid", 444)
 M.advance(2); M.runTimers()
 check(count(ns.me.recipes) == before, "hearthstone ignored")
+
+-- ===== Separate timers ending a minute apart stay separate =====
+slash("clear")
+scan({ [222] = 3600, [777] = 3660 })
+check(ns.me.cooldowns["g:222"] and ns.me.cooldowns["g:777"], "timers 60 seconds apart are separate groups")
 
 -- ===== Clicks, snooze, dismiss =====
 slash("clear")

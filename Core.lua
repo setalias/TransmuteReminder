@@ -29,7 +29,8 @@ ns.DATA_VERSION = 2
 local MIN_REAL_COOLDOWN = 120  -- seconds; shorter spell cooldowns are treated as global cooldowns
 local CHECK_INTERVAL = 30      -- seconds between safety checks
 local AUTO_SCAN_THROTTLE = 10  -- seconds between automatic profession scans
-local TOLERANCE = 90           -- seconds; cooldowns this close are the same group, and smaller changes are not announced
+local TOLERANCE = 90           -- seconds; smaller changes to a cooldown are not announced again
+local GROUP_TOLERANCE = 3      -- seconds; recipes sharing a cooldown report identical times
 local PREVIEW_SECONDS = 10
 
 ns.DEFAULTS = {
@@ -449,7 +450,8 @@ end
 ---------------------------------------------------------------------------
 -- Grouping
 -- A reading is { id, name, icon, transmute, remaining, duration }. Recipes
--- whose remaining time matches within TOLERANCE share a cooldown and become one
+-- whose remaining time matches within GROUP_TOLERANCE share a cooldown (the
+-- game reports identical values for them) and become one
 -- group, keyed by its representative recipe (the lowest transmute ID, else the
 -- lowest ID). Recipes that are ready keep the group they were last seen in.
 ---------------------------------------------------------------------------
@@ -494,7 +496,7 @@ local function regroup(readings, source, manual, quiet)
     local clusters = {}
     for _, r in ipairs(oncd) do
         local c = clusters[#clusters]
-        if c and math.abs(r.remaining - c.base) <= TOLERANCE then
+        if c and math.abs(r.remaining - c.base) <= GROUP_TOLERANCE then
             c.members[#c.members + 1] = r
         else
             clusters[#clusters + 1] = { base = r.remaining, members = { r } }
