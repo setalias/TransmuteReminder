@@ -359,7 +359,7 @@ function ns.KnownTransmutes()
     return me.transmutes or {}
 end
 
-function ns.set_cooldown(key, name, expiry, source, extra)
+function ns.set_cooldown(key, name, expiry, source, extra, quiet)
     local e = me.cooldowns[key] or {}
     e.name = name
     e.expiry = expiry
@@ -373,6 +373,10 @@ function ns.set_cooldown(key, name, expiry, source, extra)
     ns.alerted[key] = nil
     ns.schedule(expiry)
     ns.Update()
+    if quiet then
+        if ns.Options_Refresh then ns.Options_Refresh() end
+        return
+    end
     local note = ""
     if s.debug then
         note = " (" .. source .. ")"
@@ -439,10 +443,10 @@ end
 -- lowest ID). Recipes that are ready keep the group they were last seen in.
 ---------------------------------------------------------------------------
 
-local function apply_group(key, info, expiry, source, manual)
+local function apply_group(key, info, expiry, source, manual, quiet)
     local e = me.cooldowns[key]
     if manual or not e or math.abs(e.expiry - expiry) > TOLERANCE then
-        ns.set_cooldown(key, info.name, expiry, source, info)
+        ns.set_cooldown(key, info.name, expiry, source, info, quiet)
     else
         for k, v in pairs(info) do
             if v ~= nil then e[k] = v end
@@ -463,7 +467,7 @@ local function prune_groups()
     end
 end
 
-local function regroup(readings, source, manual)
+local function regroup(readings, source, manual, quiet)
     local now = GetServerTime()
     local oncd = {}
     for _, r in ipairs(readings) do
@@ -504,7 +508,7 @@ local function regroup(readings, source, manual)
             count = #c.members,
             transmute = repT ~= nil,
             duration = duration,
-        }, now + rep.remaining, source, manual)
+        }, now + rep.remaining, source, manual, quiet)
     end
 
     prune_groups()
@@ -707,7 +711,8 @@ function ns.scan(manual)
         me.transmutes = names
     end
 
-    regroup(results, "scanned from profession window", manual)
+    -- Scans only list what was found; /tmr whatsnext reports the next cooldown.
+    regroup(results, "scanned from profession window", manual, true)
 
     if manual and not anyCooldown then
         print_msg("nothing is on cooldown, or the game gave no readable cooldown.")
@@ -796,6 +801,27 @@ function ns.Snooze()
     ns.Update()
     C_Timer.After(minutes * 60 + 1, ns.Update)
     print_msg(string.format("snoozed for %d minutes.", minutes))
+end
+
+-- One line: what is ready now, or the next cooldown to finish.
+function ns.WhatsNext()
+    local now = GetServerTime()
+    local ready, nextItem = {}, nil
+    for _, it in ipairs(ns.own_items()) do
+        if it.ready then
+            ready[#ready + 1] = ns.short_label(it)
+        elseif not nextItem or it.expiry < nextItem.expiry then
+            nextItem = it
+        end
+    end
+    if #ready > 0 then
+        print_msg("ready now: " .. table.concat(ready, ", ") .. ".")
+    elseif nextItem then
+        print_msg(string.format("next: %s in %s (%s).", ns.short_label(nextItem),
+            ns.format_duration(nextItem.expiry - now), time_label(nextItem.expiry)))
+    else
+        print_msg("nothing recorded yet. Open your Alchemy window first.")
+    end
 end
 
 function ns.OpenProfession()
@@ -966,6 +992,8 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         if ns.OpenOptions then ns.OpenOptions() end
     elseif cmd == "scan" then
         ns.scan(true)
+    elseif cmd == "whatsnext" or cmd == "next" then
+        ns.WhatsNext()
     elseif cmd == "reset" then
         s.point = nil
         ns.Popup_ResetPosition()
@@ -1062,6 +1090,6 @@ SlashCmdList["TRANSMUTEREMINDER"] = function(input)
         end
     else
         for _, line in ipairs(ns.StatusLines()) do print_msg(line) end
-        print_msg("commands: /tmr options, test, scan, reset, clear, lock, unlock, minimap, message <text>, scale <n>, hours <n>, alts, forget <name>, debug [on|off]")
+        print_msg("commands: /tmr options, test, scan, whatsnext, reset, clear, lock, unlock, minimap, message <text>, scale <n>, hours <n>, alts, forget <name>, debug [on|off]")
     end
 end

@@ -325,8 +325,11 @@ function ns.Options_Create()
     button_row({
         { label = "Show reminder", width = 130, x = 0, onclick = function() ns.Preview() end },
         { label = "Scan Alchemy window", width = 160, x = 140, onclick = function() ns.scan(true); refresh_all() end },
-        { label = "Reset position", width = 120, x = 310, onclick = function() SlashCmdList["TRANSMUTEREMINDER"]("reset") end },
-        { label = "Clear cooldowns", width = 120, x = 440, onclick = function()
+        { label = "What's next", width = 120, x = 310, onclick = function() ns.WhatsNext() end },
+    })
+    button_row({
+        { label = "Reset position", width = 130, x = 0, onclick = function() SlashCmdList["TRANSMUTEREMINDER"]("reset") end },
+        { label = "Clear cooldowns", width = 160, x = 140, onclick = function()
             SlashCmdList["TRANSMUTEREMINDER"]("clear")
             refresh_all()
         end },
@@ -471,7 +474,8 @@ function ns.Options_Create()
         "/tmr    Show the current status\n"
         .. "/tmr options    Open this panel\n"
         .. "/tmr test    Show the reminder now\n"
-        .. "/tmr scan    Scan the open Alchemy window and print each recipe's cooldown\n"
+        .. "/tmr scan    Scan the open Alchemy window and list each transmute with its time left\n"
+        .. "/tmr whatsnext    Show the next cooldown to finish\n"
         .. "/tmr reset    Reset the reminder position\n"
         .. "/tmr clear    Clear this character's stored cooldowns\n"
         .. "/tmr lock, /tmr unlock    Lock or unlock the position\n"

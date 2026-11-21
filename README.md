@@ -33,6 +33,7 @@ Options > AddOns > TransmuteReminder holds every setting above plus the command 
 - `/tmr options` opens the options panel
 - `/tmr test` previews the frame for 10 seconds
 - `/tmr scan` scans the open Alchemy window and lists each recipe with its time left
+- `/tmr whatsnext` shows the next cooldown to finish
 - `/tmr reset` resets the frame position
 - `/tmr clear` clears this character's stored cooldowns
 - `/tmr lock` and `/tmr unlock` lock or unlock dragging

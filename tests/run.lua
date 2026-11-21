@@ -55,8 +55,10 @@ check(moon and not moon.transmute, "Mooncloth tracked as a non-transmute group")
 check(ns.me.recipes[888] == nil, "unlearned recipe ignored")
 check(count(ns.me.cooldowns) == 3, "exactly three groups")
 check(printed("Transmute: Iron to Gold - 1h 0m"), "scan list shows time")
-check(printed("next Arcanite ready in"), "short label in ready message")
-check(not printed("scanned from"), "no source text outside debug")
+check(not printed("next "), "scan prints no next lines")
+M.printed = {}
+slash("whatsnext")
+check(#M.printed == 1 and printed("next: Iron to Gold in 1h 0m"), "whatsnext shows only the soonest")
 
 -- Reopening the window does not repeat messages
 M.printed = {}
@@ -77,6 +79,9 @@ M.advance(3600 + 5); M.runTimers()
 check(popup().__shown, "popup shown when Iron to Gold is ready")
 check(ns.lastState.own[1].key == "g:222", "Iron to Gold is the ready item")
 check(popup().sub.__text == "Ready: Iron to Gold", "sub line names it: " .. tostring(popup().sub.__text))
+M.printed = {}
+slash("whatsnext")
+check(printed("ready now: Iron to Gold."), "whatsnext reports ready items")
 check(popup().main.__text == "Check transmutes", "main text is the message")
 
 -- casting Iron to Gold re-reads everything and keeps Arcanite intact
@@ -254,7 +259,7 @@ ns.set_message("default")
 -- ===== Every slash command runs =====
 for _, c in ipairs({ "", "test", "options", "scan", "reset", "clear", "lock", "unlock", "minimap", "minimap",
     "message", "message Hi", "message default", "scale", "scale 2", "scale default", "scale 9",
-    "hours", "hours 24", "alts", "forget", "forget nobody", "debug", "debug on", "scan", "debug off", "bogus" }) do
+    "hours", "hours 24", "whatsnext", "next", "alts", "forget", "forget nobody", "debug", "debug on", "scan", "debug off", "bogus" }) do
     try("slash '" .. c .. "'", function() slash(c) end)
 end
 local mb = ns.minimapButton

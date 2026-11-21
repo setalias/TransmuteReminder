@@ -15,7 +15,8 @@
 - Optional sound, repeat reminder, snooze length and chat message.
 - Hide in combat, instances or groups. No cooldown reads happen in combat.
 - Minimap button, AddOn Compartment entry, lock option, 10 second preview.
-- Shorter chat messages. `/tmr scan` lists each recipe with its time left; `/tmr debug on` shows recipe IDs and raw values.
+- Shorter chat messages. `/tmr scan` only lists each recipe with its time left; `/tmr debug on` shows recipe IDs and raw values.
+- `/tmr whatsnext` (and a What's next button in the options) shows the next cooldown to finish.
 - New commands: `/tmr lock`, `/tmr unlock`, `/tmr minimap`, `/tmr alts`, `/tmr forget`.
 
 ## 0.1.0
