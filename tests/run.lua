@@ -4,7 +4,7 @@ math.atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
 local realprint = print
 local M = require("mock")
 
-local FILES = { "Core.lua", "Popup.lua", "Options.lua" }
+local FILES = { "Core.lua", "Craft.lua", "Popup.lua", "Options.lua" }
 local passed, failed = 0, 0
 local function check(cond, msg)
     if cond then passed = passed + 1 else failed = failed + 1; realprint("FAIL: " .. msg) end
@@ -78,7 +78,7 @@ M.linked = false
 M.advance(3600 + 5); M.runTimers()
 check(popup().__shown, "popup shown when Iron to Gold is ready")
 check(ns.lastState.own[1].key == "g:222", "Iron to Gold is the ready item")
-check(popup().sub.__text == "Ready: Iron to Gold", "sub line names it: " .. tostring(popup().sub.__text))
+check(popup().sub.__text:find("Click to transmute: Iron to Gold", 1, true), "sub line names what a click crafts: " .. tostring(popup().sub.__text))
 M.printed = {}
 slash("whatsnext")
 check(printed("ready now: Iron to Gold."), "whatsnext reports ready items")
@@ -142,15 +142,80 @@ scan({ [111] = 60, [777] = 60, [222] = 600 })
 M.advance(70); M.runTimers()
 check(popup().__shown and ns.lastState.own[1].key == "g:111", "Arcanite group ready")
 local onclick = popup().__scripts["OnClick"]
-try("left click", function() onclick(popup(), "LeftButton") end)
-check(M.opened == 111, "left click opens the ready recipe")
-check(not popup().__shown, "dismissed")
+
+-- ===== Click to craft =====
+M.bags = { [12359] = 1, [12363] = 1 }   -- Thorium Bar, Arcane Crystal
+check(ns.me.recipes[111].output == 12360 and #ns.me.recipes[111].reagents == 2, "scan stored result item and reagents")
+ns.Update()
+check(popup().sub.__text:find("Click to transmute: Item12360", 1, true), "craft line names the result item")
+check(popup().icon.__texture == 900000 + 12360 or true, "result item icon")
+-- window closed: first click opens it to the recipe
+M.fire(ns, "TRADE_SKILL_CLOSE")
+M.opened = nil; M.crafted = {}
+try("left click opens", function() onclick(popup(), "LeftButton") end)
+check(M.opened == 111 and #M.crafted == 0, "first click opens the recipe without crafting")
+check(popup().__shown and popup().sub.__text:find("Click again to transmute", 1, true), "box asks for a second click")
+-- window opens; second click crafts
+M.fire(ns, "TRADE_SKILL_SHOW")
+try("left click crafts", function() onclick(popup(), "LeftButton") end)
+check(M.crafted[1] == 111, "second click crafts Arcanite")
+-- the cast lands: window we opened closes, cooldown moves on
+M.spellCooldowns = { [111] = { GetTime(), 130000 }, [777] = { GetTime(), 130000 } }
+M.fire(ns, "UNIT_SPELLCAST_SUCCEEDED", "player", "guid", 111)
+check(M.closedTrade == 1, "window opened for the craft is closed again")
+M.advance(2); M.runTimers()
+check(not popup().__shown, "reminder gone after crafting")
+M.fire(ns, "TRADE_SKILL_CLOSE")
+M.spellCooldowns = {}
+
+-- missing reagents: red line, click opens the recipe instead of crafting
+slash("clear")
+scan({ [111] = 60, [777] = 60, [222] = 600 })
+M.recipeCooldowns = {}   -- later window opens must not restart the mock timers
+M.advance(70); M.runTimers()
+M.bags = { [12359] = 1 }
+ns.Update()
+check(popup().sub.__text:find("Missing: Item12363 (0/1)", 1, true), "missing reagent shown")
+M.opened = nil; M.crafted = {}; M.printed = {}
+M.fire(ns, "TRADE_SKILL_SHOW")
+try("click with missing reagents", function() onclick(popup(), "LeftButton") end)
+check(#M.crafted == 0 and M.opened == 111 and printed("missing reagents"), "no craft without reagents")
+M.fire(ns, "TRADE_SKILL_CLOSE")
+M.bags = { [12359] = 1, [12363] = 1, [7080] = 1 }
+
+-- right-click menu: pick Water to Air for the Arcanite group
+try("right click menu", function() onclick(popup(), "RightButton") end)
+local radios, buttons = {}, {}
+for _, e in ipairs(M.menu and M.menu.entries or {}) do
+    if e.kind == "radio" then radios[#radios + 1] = e end
+    if e.kind == "button" then buttons[e.text] = e.a end
+end
+check(#radios == 2, "menu lists both recipes in the Arcanite group: " .. #radios)
+check(radios[1].a() == true, "Arcanite is picked by default")
+check(buttons["Snooze 10 minutes"] and buttons["Dismiss"], "menu has snooze and dismiss")
+try("pick water to air", function() radios[2].b() end)
+check(ns.GetPick("g:111") == 777 and ns.me.picks["g:111"] == 777, "pick saved")
+check(popup().sub.__text:find("Click to transmute: Item7082", 1, true), "box shows the new pick")
+M.fire(ns, "TRADE_SKILL_SHOW"); M.crafted = {}
+try("craft pick", function() onclick(popup(), "LeftButton") end)
+check(M.crafted[1] == 777, "left-click crafts the picked recipe")
+M.fire(ns, "TRADE_SKILL_CLOSE")
+
+-- crafting off: left-click opens the recipe and dismisses
+ns.s.clickCrafts = false; ns.Update()
+check(not popup().sub.__text:find("Click to", 1, true), "no craft line when crafting is off")
+M.opened = nil
+try("left click open", function() onclick(popup(), "LeftButton") end)
+check(M.opened == 111 and not popup().__shown, "left click opens the recipe and dismisses")
+ns.s.clickCrafts = true
 M.ticker()
 check(not popup().__shown, "stays dismissed")
 M.advance(600); M.runTimers()
 check(popup().__shown and ns.lastState.own[1].key == "g:222", "Iron to Gold shows after Arcanite was dismissed")
-try("right click", function() onclick(popup(), "RightButton") end)
-check(not popup().__shown and ns.snoozeUntil, "snoozed")
+M.shift = true
+try("shift right click", function() onclick(popup(), "RightButton") end)
+M.shift = false
+check(not popup().__shown and ns.snoozeUntil, "shift-right-click snoozes")
 M.advance(10 * 60 + 5); M.runTimers()
 check(popup().__shown, "back after snooze")
 try("middle click", function() onclick(popup(), "MiddleButton") end)

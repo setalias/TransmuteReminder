@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Click to craft: left-click the reminder to craft. If the profession window is closed, the first click opens it to the recipe and the second crafts, then the window closes again.
+- Right-click menu to choose which recipe each cooldown crafts (for example Arcanite or Earth to Water), with result item icons. Your choice is remembered per character.
+- The reminder turns green and shows the result item when a click will craft, or red with the missing reagents.
+- Snooze moved to the right-click menu and Shift-right-click. Middle-click or Ctrl-click dismisses.
+- New option to turn click-to-craft off and keep the old open-the-recipe behavior.
+
 ## 0.1.0
 
 First release for WoW: Forever.

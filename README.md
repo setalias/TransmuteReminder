@@ -9,7 +9,10 @@ A WoW: Forever addon that pops up a "Check transmutes" reminder when a transmute
 - **Works for cooldowns started before install.** Open your Alchemy window once and the addon reads every cooldown from the game.
 - **Other profession cooldowns too.** Any recipe on cooldown, such as Primal Mooncloth, is tracked when you open that profession.
 - **Alts.** Cooldowns are saved account-wide, so any character, even one without Alchemy, reminds you when an alchemist alt has something ready.
-- **Click actions.** Left-click opens the recipe in your profession window, right-click snoozes, middle-click dismisses. Drag to move.
+- **Click to craft.** When a cooldown is ready the reminder turns green and shows what it will craft, with the result item's icon. Left-click crafts it. If your profession window is closed, the first click opens it to the recipe and the second click crafts, then the window closes again.
+- **Pick your transmute.** Right-click to choose which recipe to craft for each cooldown, for example Arcanite or Earth to Water. Your choice is remembered. The menu also has Snooze, Dismiss and Open profession.
+- **Reagent check.** If you're short on reagents the reminder turns red and lists what's missing, so you don't waste a click.
+- **Shortcuts.** Shift-right-click snoozes, middle-click or Ctrl-click dismisses. Drag to move.
 - **Customizable.** Reminder text (up to 40 characters), text color, font, size, icon, background opacity, border, and a pulse or glow animation.
 - **Alerts.** Optional sound, repeat reminder, snooze length and chat message.
 - **Stays out of the way.** Never reads or shows anything in combat. Optional hiding in instances or groups.
@@ -54,6 +57,9 @@ On Forever many transmutes share one cooldown. The addon groups them so you get 
 
 **Will I get reminders on characters that aren't alchemists?**
 Yes. Cooldowns are shared across your account, so any character shows the reminder when an alchemist alt is ready. You can turn this off in the options.
+
+**Why does the first click open my Alchemy window?**
+WoW only lets addons craft while that profession's window is open. The first click opens it to the right recipe, the second crafts, and the addon closes the window afterwards. If the window is already open, one click crafts.
 
 **Will viewing a guildmate's profession mess up my timers?**
 No. Other players' professions are never read.

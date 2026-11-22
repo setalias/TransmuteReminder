@@ -53,7 +53,8 @@ ns.DEFAULTS = {
     minimapHide = false,
     minimapAngle = 215,
     remindAlts = true,
-    clickOpens = true,
+    clickOpens = true,         -- with crafting off: left-click opens the recipe
+    clickCrafts = true,        -- left-click crafts the chosen recipe
     hours = 36,                -- manual cooldown, used when the game reports none and none was seen before
     debug = false,
 }
@@ -197,6 +198,7 @@ local function init_db()
     me.recipes = me.recipes or {}         -- [recipeID] = { name, icon, transmute, group, duration }
     me.dismissed = me.dismissed or {}     -- [groupKey] = expiry dismissed
     me.altDismissed = me.altDismissed or {} -- ["Char-Realm|groupKey"] = expiry dismissed
+    me.picks = me.picks or {}             -- [groupKey] = recipeID that left-click crafts
     me.class = select(2, UnitClass("player"))
 
     ns.acct, ns.s, ns.me, ns.mykey = acct, s, me, mykey
@@ -489,6 +491,8 @@ local function regroup(readings, source, manual, quiet)
         local rec = me.recipes[r.id] or {}
         rec.name, rec.icon = r.name, r.icon or rec.icon
         rec.transmute = r.transmute or nil
+        if r.output then rec.output, rec.outIcon = r.output, r.outIcon end
+        if r.reagents then rec.reagents = r.reagents end
         if r.duration and r.duration >= MIN_REAL_COOLDOWN then rec.duration = r.duration end
         me.recipes[r.id] = rec
         if r.remaining then oncd[#oncd + 1] = r end
@@ -602,6 +606,7 @@ local function on_cast(spellID)
     if s.debug then
         print_msg(string.format("cast: %s (%s)", tostring(name), tostring(spellID)))
     end
+    if ns.OnCraftCast then ns.OnCraftCast(spellID) end
     if me.recipes[spellID] or is_transmute(spellID, name) then
         -- Give the game a moment to apply the cooldown before reading it.
         C_Timer.After(1.5, function() after_cast(spellID) end)
@@ -657,6 +662,11 @@ local function collect()
                             remaining = remaining, duration = duration,
                             viaRecipe = viaRecipe, viaSpell = viaSpell,
                         }
+                        local d = ns.recipe_details and ns.recipe_details(id)
+                        if d then
+                            local r = results[#results]
+                            r.output, r.outIcon, r.reagents = d.output, d.outIcon, d.reagents
+                        end
                     end
                 end
             end
@@ -920,6 +930,15 @@ function ns.Update()
 
     local now = GetServerTime()
     local own = ns.ready_own()
+    -- The group picked in the right-click menu goes first.
+    if ns.focusKey then
+        for i, it in ipairs(own) do
+            if it.key == ns.focusKey then
+                table.insert(own, 1, table.remove(own, i))
+                break
+            end
+        end
+    end
     local alts = s.remindAlts and ns.ready_alts() or {}
     local snoozed = ns.snoozeUntil and now < ns.snoozeUntil
     if ns.snoozeUntil and not snoozed then ns.snoozeUntil = nil end
@@ -977,6 +996,7 @@ events:SetScript("OnEvent", function(self, event, ...)
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
         self:RegisterEvent("TRADE_SKILL_SHOW")
         self:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
+        self:RegisterEvent("TRADE_SKILL_CLOSE")
 
         for _, c in pairs(ns.acct.chars) do
             for _, e in pairs(c.cooldowns or {}) do
@@ -993,7 +1013,11 @@ events:SetScript("OnEvent", function(self, event, ...)
         on_cast(spellID)
 
     elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" then
+        if event == "TRADE_SKILL_SHOW" then ns.tradeOpen = true end
         queue_scan()
+
+    elseif event == "TRADE_SKILL_CLOSE" then
+        ns.OnTradeSkillClosed()
 
     else
         -- PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED, PLAYER_ENTERING_WORLD, ZONE_CHANGED_NEW_AREA, GROUP_ROSTER_UPDATE

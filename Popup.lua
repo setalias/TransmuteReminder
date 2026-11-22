@@ -110,17 +110,18 @@ function ns.FillTooltip(tt, mode)
     tt:AddLine(" ")
     local s = ns.s
     if mode == "popup" then
-        if s.clickOpens then
+        if s.clickCrafts then
+            tt:AddLine("Left-click: craft the chosen recipe", 0.6, 0.8, 1)
+        elseif s.clickOpens then
             tt:AddLine("Left-click: open the recipe and dismiss", 0.6, 0.8, 1)
-            tt:AddLine("Ctrl-click or middle-click: dismiss", 0.6, 0.8, 1)
         else
-            tt:AddLine("Left-click or middle-click: dismiss", 0.6, 0.8, 1)
+            tt:AddLine("Left-click: dismiss", 0.6, 0.8, 1)
         end
+        tt:AddLine("Right-click: choose a recipe, snooze or dismiss", 0.6, 0.8, 1)
         if s.snoozeMinutes > 0 then
-            tt:AddLine(string.format("Right-click: snooze %d minutes", s.snoozeMinutes), 0.6, 0.8, 1)
-        else
-            tt:AddLine("Right-click: dismiss", 0.6, 0.8, 1)
+            tt:AddLine(string.format("Shift-right-click: snooze %d minutes", s.snoozeMinutes), 0.6, 0.8, 1)
         end
+        tt:AddLine("Middle-click or Ctrl-click: dismiss", 0.6, 0.8, 1)
         if not s.locked then
             tt:AddLine("Drag: move", 0.6, 0.8, 1)
         end
@@ -222,13 +223,14 @@ function ns.Popup_Create()
             return
         end
         if button == "RightButton" then
-            ns.Snooze()
-        elseif button == "MiddleButton" then
+            if IsShiftKeyDown() then ns.Snooze() else ns.OpenMenu(self) end
+        elseif button == "MiddleButton" or IsControlKeyDown() then
             ns.Dismiss()
         else
-            if ns.s.clickOpens and not IsControlKeyDown() then
-                ns.OpenProfession()
-            end
+            local state = ns.lastState
+            local primary = state and state.own[1]
+            if ns.Craft(primary) then return end
+            if ns.s.clickOpens then ns.OpenProfession() end
             ns.Dismiss()
         end
     end)
@@ -260,18 +262,31 @@ function ns.Popup_Set(state)
     local primary = state.own[1] or state.alts[1]
     local named = primary and not primary.transmute
     local mainText = named and ("Check " .. primary.name) or ns.get_message()
+    local craft = state.own[1] and ns.CraftInfo(state.own[1]) or nil
 
-    -- Second line: which of this character's cooldowns are ready, then alts.
+    -- Lines under the main text: what a click crafts, the other ready
+    -- cooldowns, then alts. Each line is escaped on its own so the craft line
+    -- can keep its color.
     local parts = {}
+    if craft then
+        local verb = craft.transmute and "transmute" or "craft"
+        if craft.missing then
+            parts[#parts + 1] = "|cffff6666Missing: " .. ns.escape_pipes(ns.missing_text(craft.missing)) .. "|r"
+        elseif craft.awaiting then
+            parts[#parts + 1] = "|cff66ff66Click again to " .. verb .. ": " .. ns.escape_pipes(craft.name) .. "|r"
+        else
+            parts[#parts + 1] = "|cff66ff66Click to " .. verb .. ": " .. ns.escape_pipes(craft.name) .. "|r"
+        end
+    end
     local names = {}
     for _, it in ipairs(state.own) do
-        if not it.fake and not (named and it == primary) then
+        if not it.fake and not ((named or craft) and it == primary) then
             names[#names + 1] = ns.short_label(it)
         end
     end
     if #names > 0 then
-        parts[#parts + 1] = (named and state.own[1] == primary and "Also ready: " or "Ready: ")
-            .. table.concat(names, ", ")
+        local also = (named or craft) and state.own[1] == primary
+        parts[#parts + 1] = ns.escape_pipes((also and "Also ready: " or "Ready: ") .. table.concat(names, ", "))
     end
     if #state.alts > 0 then
         local order, byChar = {}, {}
@@ -286,7 +301,7 @@ function ns.Popup_Set(state)
         for _, c in ipairs(order) do
             chunks[#chunks + 1] = c .. " (" .. table.concat(byChar[c], ", ") .. ")"
         end
-        parts[#parts + 1] = "Alts: " .. table.concat(chunks, ", ")
+        parts[#parts + 1] = ns.escape_pipes("Alts: " .. table.concat(chunks, ", "))
     end
     local subText = table.concat(parts, "\n")
 
@@ -294,11 +309,12 @@ function ns.Popup_Set(state)
     local showIcon = s.display ~= "text"
     local color = s.textColor
     local path = font_path()
-    local texture = icon_texture(primary)
+    local texture = (craft and craft.icon) or icon_texture(primary)
+    local borderState = craft and (craft.missing and "missing" or "craft") or "none"
 
     -- Skip the rebuild when nothing visible changed (the 30 second check calls this).
     local sig = table.concat({ mainText, subText, s.display, tostring(texture), path,
-        color[1], color[2], color[3], s.bgAlpha, tostring(s.border), s.animation }, "\031")
+        color[1], color[2], color[3], s.bgAlpha, tostring(s.border), s.animation, borderState }, "\031")
     if f.sig == sig and f:IsShown() then return end
     f.sig = sig
 
@@ -306,7 +322,7 @@ function ns.Popup_Set(state)
     f.main:SetTextColor(color[1], color[2], color[3])
     f.main:SetText(ns.escape_pipes(mainText))
     f.sub:SetFont(path, 12, "")
-    f.sub:SetText(ns.escape_pipes(subText))
+    f.sub:SetText(subText)
 
     local subShown = showText and subText ~= ""
     local textW = showText and f.main:GetStringWidth() or 0
@@ -353,6 +369,17 @@ function ns.Popup_Set(state)
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
     f:SetBackdropColor(0, 0, 0, s.bgAlpha)
+    -- Green border when a click will craft, red when reagents are missing.
+    if borderState == "craft" then
+        f:SetBackdropBorderColor(0.3, 1, 0.3, 1)
+        f.glow:SetBackdropBorderColor(0.3, 1, 0.3, 1)
+    elseif borderState == "missing" then
+        f:SetBackdropBorderColor(1, 0.35, 0.35, 1)
+        f.glow:SetBackdropBorderColor(1, 0.35, 0.35, 1)
+    else
+        f:SetBackdropBorderColor(1, 1, 1, 1)
+        f.glow:SetBackdropBorderColor(1, 0.82, 0.1, 1)
+    end
 
     f:Show()
     set_animation(s.animation)

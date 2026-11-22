@@ -12,5 +12,6 @@
 ## AddonCompartmentFuncOnLeave: TransmuteReminder_OnAddonCompartmentLeave
 
 Core.lua
+Craft.lua
 Popup.lua
 Options.lua

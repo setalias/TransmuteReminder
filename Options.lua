@@ -264,7 +264,7 @@ function ns.Options_Create()
         "Shows a reminder when a transmute or other profession cooldown is ready. No countdown bars. "
         .. "Recipes that share a cooldown are grouped into one entry. "
         .. "Cooldowns are shared across your characters, so any character can remind you when an alchemist alt is ready. "
-        .. "Left-click the reminder to open the recipe, right-click to snooze, drag to move it.")
+        .. "Left-click the reminder to craft, right-click to choose which recipe to craft, drag to move it.")
 
     header("Status")
     local status = text_block("GameFontNormal", "")
@@ -439,7 +439,7 @@ function ns.Options_Create()
         function() return s.repeatMinutes end,
         function(v) s.repeatMinutes = v end,
         "%d")
-    slider("Snooze length on right-click (minutes, 0 = dismiss)", 0, 60, 5,
+    slider("Snooze length (minutes, 0 = dismiss). Snooze from the right-click menu or with Shift-right-click", 0, 60, 5,
         function() return s.snoozeMinutes end,
         function(v) s.snoozeMinutes = v end,
         "%d")
@@ -460,7 +460,10 @@ function ns.Options_Create()
     check("Remind about cooldowns ready on other characters",
         function() return s.remindAlts end,
         function(v) s.remindAlts = v; ns.Update() end)
-    check("Left-click opens the recipe",
+    check("Left-click crafts the chosen recipe (the first click opens the profession if it's closed)",
+        function() return s.clickCrafts end,
+        function(v) s.clickCrafts = v; ns.awaitingCraft = nil; ns.Update() end)
+    check("When crafting is off, left-click opens the recipe",
         function() return s.clickOpens end,
         function(v) s.clickOpens = v end)
     check("Show the minimap button",

@@ -82,6 +82,30 @@ function M.install(opts)
     IsInInstance = function() return M.inInstance end
     IsInGroup = function() return M.inGroup end
     IsControlKeyDown = function() return M.ctrl or false end
+    IsShiftKeyDown = function() return M.shift or false end
+    M.bags = {}             -- itemID -> count
+    M.crafted = {}          -- recipeIDs passed to CraftRecipe
+    M.closedTrade = 0
+    C_Item = {
+        GetItemCount = function(id) return M.bags[id] or 0 end,
+        GetItemIconByID = function(id) return 900000 + id end,
+        GetItemNameByID = function(id) return "Item" .. id end,
+    }
+    M.menu = nil
+    MenuUtil = {
+        CreateContextMenu = function(owner, build)
+            local root = { entries = {} }
+            local function add(kind, text, a, b)
+                root.entries[#root.entries + 1] = { kind = kind, text = text, a = a, b = b }
+            end
+            function root:CreateTitle(text) add("title", text) end
+            function root:CreateDivider() add("divider") end
+            function root:CreateButton(text, fn) add("button", text, fn) end
+            function root:CreateRadio(text, isSel, setSel) add("radio", text, isSel, setSel) end
+            build(owner, root)
+            M.menu = root
+        end,
+    }
     UnitName = function() return M.charName or "Ayla" end
     GetRealmName = function() return "Area 52" end
     UnitClass = function() return "Mage", "MAGE" end
@@ -163,6 +187,22 @@ function M.install(opts)
         end,
         GetRecipeCooldown = function(id) return M.recipeCooldowns[id] end,
         OpenRecipe = function(id) M.opened = id end,
+        GetRecipeSchematic = function(id)
+            -- Arcanite: 1 Thorium Bar (12359) + 1 Arcane Crystal (12363) -> Arcanite Bar (12360)
+            if id == 111 then
+                return { outputItemID = 12360, reagentSlotSchematics = {
+                    { reagents = { { itemID = 12359 } }, quantityRequired = 1, required = true },
+                    { reagents = { { itemID = 12363 } }, quantityRequired = 1, required = true },
+                } }
+            elseif id == 777 then
+                return { outputItemID = 7082, reagentSlotSchematics = {
+                    { reagents = { { itemID = 7080 } }, quantityRequired = 1, required = true },
+                } }
+            end
+            return { reagentSlotSchematics = {} }
+        end,
+        CraftRecipe = function(id, n) M.crafted[#M.crafted + 1] = id end,
+        CloseTradeSkill = function() M.closedTrade = M.closedTrade + 1 end,
         IsTradeSkillLinked = function() return M.linked end,
         IsTradeSkillGuild = function() return false end,
     }
